@@ -1,4 +1,4 @@
-.atom-build.json
+.atom-build.yml
 debug.bat
 old*
 test.out
