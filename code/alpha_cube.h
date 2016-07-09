@@ -54,6 +54,8 @@ struct GAME_CONTROLLER_INPUT
             GAME_BUTTON_STATE move_right;
             GAME_BUTTON_STATE move_left;
             GAME_BUTTON_STATE drop;
+            GAME_BUTTON_STATE clear_board;
+            GAME_BUTTON_STATE escape;
         };
     };
 };
@@ -82,7 +84,7 @@ struct GAME_MEMORY
     int transient_storage_offset;
 };
 
-#define GAME_UPDATE_AND_RENDER(name) void name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
+#define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 
 struct RGBA_COLOR
@@ -92,7 +94,7 @@ struct RGBA_COLOR
 
 struct GAME_STATE
 {
-    RGBA_COLOR palettes[1][4];
+    RGBA_COLOR palettes[2][4];
     PIXEL_BACKBUFFER buffer;
     bool32 board[20][10];
     int frames;

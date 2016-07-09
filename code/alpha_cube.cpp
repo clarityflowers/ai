@@ -82,11 +82,23 @@ void* AllocatePermanentStorage(GAME_MEMORY* memory, int size)
 
 int InitColors(GAME_STATE* game_state)
 {
-    RGBA_COLOR* palette = game_state->palettes[0];
-    palette[0] = {0x9C, 0xBD, 0x0F, 0xFF};
-    palette[1] = {0x8C, 0xAD, 0x0F, 0xFF};
-    palette[2] = {0x30, 0x62, 0x30, 0xFF};
-    palette[3] = {0x0F, 0x38, 0x0F, 0xFF};
+    int i=0;
+    {
+        RGBA_COLOR* palette = game_state->palettes[i++];
+        int j=0;
+        palette[j++] = {0x9C, 0xBD, 0x0F, 0xFF};
+        palette[j++] = {0x8C, 0xAD, 0x0F, 0xFF};
+        palette[j++] = {0x30, 0x62, 0x30, 0xFF};
+        palette[j++] = {0x0F, 0x38, 0x0F, 0xFF};
+    }
+    {
+        RGBA_COLOR* palette = game_state->palettes[i++];
+        int j=0;
+        palette[j++] = {0xf8, 0xf7, 0xd8, 0xFF};
+        palette[j++] = {0xce, 0x89, 0x6a, 0xFF};
+        palette[j++] = {0x78, 0x1c, 0x4d, 0xFF};
+        palette[j++] = {0x1e, 0x03, 0x24, 0xFF};
+    }
     return 1;
 }
 
@@ -132,14 +144,26 @@ void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
 
 void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y)
 {
+    int screen_x, screen_y;
     if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
     {
-        DrawRect(buffer, BOARD_X + x * 8, BOARD_Y + y * 8, 8, 8, 2);
+        screen_x = BOARD_X + x * 8;
+        screen_y = BOARD_Y + y * 8;
     }
-    if (y == BOARD_HEIGHT)
+    else if (y == BOARD_HEIGHT)
     {
-        DrawRect(buffer, 124, BOARD_HEIGHT*8 + 8 + BOARD_Y, 8, 8, 2);
+        screen_x = 124;
+        screen_y = BOARD_HEIGHT*8 + 8 + BOARD_Y;
     }
+    else
+    {
+        return;
+    }
+    DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 2);
+    DrawRect(buffer, screen_x, screen_y, 1, 7, 0);
+    DrawRect(buffer, screen_x, screen_y + 7, 7, 1, 0);
+    DrawRect(buffer, screen_x + 1, screen_y, 7, 1, 3);
+    DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 7, 3);
 }
 
 //******************************************************************************
@@ -151,8 +175,10 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     GAME_STATE *game_state;
     PIXEL_BACKBUFFER *buffer;
     void* pixels;
+    uint64 timer;
+    int palette = 1;
 
-    uint64 timer = StartProfiler();
+    timer = StartProfiler();
     Assert(sizeof(GAME_STATE) <= memory->permanent_storage_size);
     game_state = (GAME_STATE*) memory->permanent_storage;
     buffer = &(game_state->buffer);
@@ -176,6 +202,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // DRAW BACKGROUND
     DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 3);
+    DrawRect(buffer, BOARD_X - 1, BOARD_Y - 1, BOARD_WIDTH * 8 + 2, BOARD_HEIGHT * 8 + 2, 2);
     DrawRect(buffer, BOARD_X, BOARD_Y, BOARD_WIDTH * 8, BOARD_HEIGHT * 8, 1);
 
     {
@@ -195,14 +222,30 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         GAME_CONTROLLER_INPUT *keyboard = &(input->controllers[0]);
         {
+            GAME_BUTTON_STATE *button = &(keyboard->escape);
+            if (button->transitions >= 1)
+            {
+                button->transitions--;
+                button->is_down = !button->is_down;
+                if (button->is_down)
+                {
+                    return 0;
+                }
+            }
+        }
+        {
             GAME_BUTTON_STATE *button = &(keyboard->move_right);
             if (button->transitions >= 1)
             {
                 button->transitions--;
                 button->is_down = !button->is_down;
-                if (button->is_down && game_state->block_x < BOARD_WIDTH - 1)
+                if (button->is_down && game_state->block_x < BOARD_WIDTH - 1 && !game_state->board[game_state->block_y][game_state->block_x + 1])
                 {
                     game_state->block_x++;
+                    if (game_state->block_y >= 0 && game_state->board[game_state->block_y - 1][game_state->block_x])
+                    {
+                        game_state->fall_time = 0.0f;
+                    }
                 }
             }
         }
@@ -212,9 +255,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 button->transitions--;
                 button->is_down = !button->is_down;
-                if (button->is_down && game_state->block_x > 0)
+                if (button->is_down && game_state->block_x > 0 && !game_state->board[game_state->block_y][game_state->block_x - 1])
                 {
                     game_state->block_x--;
+                    if (game_state->block_y >= 0 && game_state->board[game_state->block_y - 1][game_state->block_x])
+                    {
+                        game_state->fall_time = 0.0f;
+                    }
                 }
             }
         }
@@ -224,7 +271,19 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 button->transitions--;
                 button->is_down = !button->is_down;
-                game_state->fall_quickly = button->is_down;
+            }
+            game_state->fall_quickly = button->is_down;
+        }
+        {
+            GAME_BUTTON_STATE *button = &(keyboard->clear_board);
+            if (button->transitions >= 1)
+            {
+                button->transitions--;
+                button->is_down = !button->is_down;
+                if (button->is_down)
+                {
+                    memset(game_state->board, 0, sizeof(game_state->board)[0][0] * BOARD_WIDTH * BOARD_HEIGHT);
+                }
             }
         }
     }
@@ -243,11 +302,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         game_state->fall_time += 1.0f;
         if (game_state->fall_time >= fall_speed)
         {
-            if (game_state->block_y > 0)
+            if (game_state->block_y > 0 && !game_state->board[game_state->block_y - 1][game_state->block_x])
             {
                 game_state->block_y--;
             }
-            else if (game_state->block_y == 0)
+            else
             {
                 game_state->board[game_state->block_y][game_state->block_x] = true;
                 game_state->block_y = 20;
@@ -293,7 +352,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 RGBA_COLOR color;
 
                 color_index = (pixel_quad_value) & 3;
-                color = game_state->palettes[0][color_index];
+                color = game_state->palettes[palette][color_index];
                 render_row = render_pixels + (x + (y*render_buffer->w));
                 for (int i=0; i < scale_factor; i++)
                 {
@@ -321,5 +380,5 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
     StopProfiler(timer, true);
-
+    return 1;
 }

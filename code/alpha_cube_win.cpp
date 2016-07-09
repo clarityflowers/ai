@@ -28,14 +28,14 @@ StopProfiler(uint64 start_time)
 {
     uint64 end_time, time_difference, performance_frequency;
     double milliseconds;
-    char FPSBuffer[256];
+    char buffer[256];
 
     end_time = SDL_GetPerformanceCounter();
     time_difference = end_time - start_time;
     performance_frequency = SDL_GetPerformanceFrequency();
     milliseconds = (time_difference * 1000.0) / performance_frequency;
-    snprintf(FPSBuffer, sizeof(FPSBuffer), "%.02f ms elapsed\n", milliseconds);
-    OutputDebugStringA(FPSBuffer);
+    snprintf(buffer, sizeof(buffer), "%.02f ms elapsed\n", milliseconds);
+    OutputDebugStringA(buffer);
 
     return milliseconds;
 }
@@ -187,7 +187,7 @@ Win_Render(void *data)
         delta_time = SCREEN_TICKS_PER_FRAME;
     }
     SDL_RenderPresent(buffer->renderer);
-    buffer->last_frame_time = SDL_GetTicks();
+    buffer->last_frame_time = current_frame_time;
     return 1;
 }
 
@@ -287,6 +287,9 @@ WinMain(
 	game_is_running = true;
 	render_buffer.last_frame_time = SDL_GetTicks();
     timer = StartProfiler();
+
+    double fps_tracker[10] = {};
+    int fps_tracker_index = 0;
 	while (game_is_running)
 	{
 		FILETIME new_dll_write_time;
@@ -331,6 +334,14 @@ WinMain(
 						{
 							Win_LogKeyPress(&(new_keyboard->drop), &event);
 						} break;
+                        case SDLK_k:
+                        {
+							Win_LogKeyPress(&(new_keyboard->clear_board), &event);
+                        } break;
+                        case SDLK_ESCAPE:
+                        {
+							Win_LogKeyPress(&(new_keyboard->escape), &event);
+                        } break;
 					}
 				}
 				default:
@@ -352,10 +363,21 @@ WinMain(
             SDL_WaitThread(render_thread, &thread_return_value);
         }
 
-        StopProfiler(timer);
+        OutputDebugStringA("Game loop: ");
+        fps_tracker[fps_tracker_index] = StopProfiler(timer);
         timer = StartProfiler();
+        fps_tracker_index = (fps_tracker_index + 1) % 10;
+        double fps = 0.0;
+        for (int i=0; i<ArrayCount(fps_tracker); i++)
+        {
+            fps += fps_tracker[i];
+        }
+        fps = (1.0 / (fps / ArrayCount(fps_tracker))) * 1000.0;
+        char out_buffer[256];
+        snprintf(out_buffer, sizeof(out_buffer), "           %.02f fps\n", fps);
+        OutputDebugStringA(out_buffer);
 
-		game.UpdateAndRender(&game_memory, &buffer, new_input, 0);
+		game_is_running = game.UpdateAndRender(&game_memory, &buffer, new_input, 0);
         memcpy(render_buffer.pixels, buffer.pixels, buffer_memory_size);
         render_thread = SDL_CreateThread(Win_Render, "Render", (void*) (&render_buffer));
 
@@ -364,7 +386,6 @@ WinMain(
 			old_input = new_input;
 			new_input = tmp;
 		}
-        OutputDebugStringA("Game loop: ");
 		OutputDebugStringA("\n");
 	}
     SDL_WaitThread(render_thread, &thread_return_value);
