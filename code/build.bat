@@ -16,7 +16,7 @@ REM cl %CommonCompilerFlags% ..\code\win32.cpp /link -subsystem:windows,5.1 %Com
 
 REM 64-bit build
 del *.pdb > NUL 2> NUL
-cl %CommonCompilerFlags% ..\roguelike\code\alpha_cube.cpp -Fmalpha_cube.map -LD /I %SDLPath%\include /link -incremental:no -opt:ref -PDB:alpha_cube_%random%.pdb  -EXPORT:GameUpdateAndRender /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
+cl %CommonCompilerFlags% ..\SDL-tetris\code\alpha_cube.cpp -Fmalpha_cube.map -LD /I %SDLPath%\include /link -incremental:no -opt:ref -PDB:alpha_cube_%random%.pdb  -EXPORT:GameUpdateAndRender /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
 REM -EXPORT:GameGetSoundSamples
-cl %CommonCompilerFlags% ..\roguelike\code\alpha_cube_win.cpp -Fmalpha_cube_win32.map /I %SDLPath%\include /link %CommonLinkerFlags%  /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
+cl %CommonCompilerFlags% ..\SDL-tetris\code\alpha_cube_win.cpp -Fmalpha_cube_win32.map /I %SDLPath%\include /link %CommonLinkerFlags%  /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
 popd
