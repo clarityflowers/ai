@@ -192,7 +192,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         memory->is_initialized = true;
         game_state->block_x = 5;
         game_state->block_y = 19;
-        game_state->fall_speed = 60.0f;
+        game_state->fall_speed = 1000.0f;
         game_state->fall_time = 0.0f;
         InitColors(game_state);
     }
@@ -293,13 +293,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         float fall_speed = game_state->fall_speed;
         if (game_state->fall_quickly)
         {
-            fall_speed = Min(1.2f, fall_speed / 2.0f);
+            fall_speed = Min(100.0f, fall_speed / 2.0f);
             while (game_state->fall_time > fall_speed * 2.0f)
             {
                 game_state->fall_time -= fall_speed;
             }
         }
-        game_state->fall_time += 1.0f;
+        game_state->fall_time += delta_time;
         if (game_state->fall_time >= fall_speed)
         {
             if (game_state->block_y > 0 && !game_state->board[game_state->block_y - 1][game_state->block_x])

@@ -2,6 +2,12 @@
 
 #define WIN32_STATE_FILE_NAME_COUNT MAX_PATH
 
+struct WIN_GIFFER
+{
+    GIFFER_MEMORY* memory;
+    PIXEL_BACKBUFFER buffer;
+};
+
 struct WIN_RENDER_BUFFER
 {
     void* pixels;

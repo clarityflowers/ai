@@ -1,16 +1,20 @@
 #include "alpha_cube.h"
 
 #include <SDL.h>
+#include "giffer.h"
 #include <windows.h>
 #include <stdio.h>
 #include <malloc.h>
 
 #include "alpha_cube_win.h"
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 960
-#define SCREEN_FPS 60
-#define SCREEN_TICKS_PER_FRAME 16
+// #define SCREEN_WIDTH 1024
+// #define SCREEN_HEIGHT 960
+#define SCREEN_WIDTH 256
+#define SCREEN_HEIGHT 240
+#define SCREEN_FPS 30
+#define GIFFER_FRAME_RATE 30
+#define SCREEN_TICKS_PER_FRAME 33
 
 
 //******************************************************************************
@@ -171,24 +175,23 @@ Win_LogKeyPress(GAME_BUTTON_STATE* button, SDL_Event* event)
 static int
 Win_Render(void *data)
 {
-    uint32 current_frame_time, delta_time;
     WIN_RENDER_BUFFER* buffer;
 
     buffer = (WIN_RENDER_BUFFER*) data;
     SDL_UpdateTexture(buffer->texture, NULL, buffer->pixels, buffer->pitch);
     SDL_RenderClear(buffer->renderer);
     SDL_RenderCopy(buffer->renderer, buffer->texture, NULL, NULL);
+    return 0;
+}
 
-    current_frame_time = SDL_GetTicks();
-    delta_time = current_frame_time - buffer->last_frame_time;
-    if (delta_time < SCREEN_TICKS_PER_FRAME)
-    {
-        SDL_Delay(SCREEN_TICKS_PER_FRAME - delta_time);
-        delta_time = SCREEN_TICKS_PER_FRAME;
-    }
-    SDL_RenderPresent(buffer->renderer);
-    buffer->last_frame_time = current_frame_time;
-    return 1;
+static int
+Win_Giffer(void *data)
+{
+    WIN_GIFFER* giffer;
+
+    giffer = (WIN_GIFFER*) data;
+    Giffer_Frame(giffer->memory, (uint8*) giffer->buffer.pixels);
+    return 0;
 }
 
 int CALLBACK
@@ -216,17 +219,22 @@ WinMain(
 	int pitch = NULL;
 	PIXEL_BACKBUFFER buffer = {};
     WIN_RENDER_BUFFER render_buffer = {};
+    WIN_GIFFER giffer = {};
 	GAME_INPUT input[2] = {};
 	GAME_INPUT *old_input = &(input[0]);
 	GAME_INPUT *new_input = &(input[1]);
 
     SDL_Thread *render_thread = NULL;
     int thread_return_value;
+    SDL_Thread *giffer_thread = NULL;
 
 	Win_GetEXEFileName(&state);
 	Win_BuildEXEPathFileName(&state, "alpha_cube.dll", sizeof(source_game_code_dll_full_path), source_game_code_dll_full_path);
 	Win_BuildEXEPathFileName(&state, "alpha_cube_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
 	game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
+
+    giffer.memory = Giffer_Init(SCREEN_WIDTH, SCREEN_HEIGHT, 1, (uint16)(SCREEN_TICKS_PER_FRAME * GIFFER_FRAME_RATE / 10));
+
 
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
     {
@@ -283,6 +291,9 @@ WinMain(
 	int buffer_memory_size = (buffer.w*buffer.h)*buffer.depth;
 	buffer.pixels = VirtualAlloc(0, buffer_memory_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 	render_buffer.pixels = VirtualAlloc(0, buffer_memory_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	giffer.buffer.pixels = VirtualAlloc(0, buffer_memory_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    giffer.buffer.w = buffer.w;
+    giffer.buffer.h = buffer.h;
 
 	game_is_running = true;
 	render_buffer.last_frame_time = SDL_GetTicks();
@@ -290,8 +301,10 @@ WinMain(
 
     double fps_tracker[10] = {};
     int fps_tracker_index = 0;
+    int frames = 0;
 	while (game_is_running)
 	{
+
 		FILETIME new_dll_write_time;
 		uint32 current_frame_time = 0;
 		SDL_Event event;
@@ -358,10 +371,7 @@ WinMain(
 			game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
 		}
 
-        if (render_thread != NULL)
-        {
-            SDL_WaitThread(render_thread, &thread_return_value);
-        }
+
 
         OutputDebugStringA("Game loop: ");
         fps_tracker[fps_tracker_index] = StopProfiler(timer);
@@ -377,10 +387,50 @@ WinMain(
         snprintf(out_buffer, sizeof(out_buffer), "           %.02f fps\n", fps);
         OutputDebugStringA(out_buffer);
 
-		game_is_running = game.UpdateAndRender(&game_memory, &buffer, new_input, 0);
+		game_is_running = game_is_running && game.UpdateAndRender(&game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
+        if (render_thread != NULL)
+        {
+            uint32 current_frame_time, delta_time, time_to_wait;
+            char text[256];
+
+            time_to_wait = 0;
+            SDL_WaitThread(render_thread, &thread_return_value);
+            current_frame_time = SDL_GetTicks();
+            delta_time = current_frame_time - render_buffer.last_frame_time;
+            snprintf(text, sizeof(text), "current_frame_time: %d\n   last_frame_time: %d\n        delta_time: %d\n", current_frame_time, render_buffer.last_frame_time, delta_time);
+            OutputDebugStringA(text);
+            if (delta_time < SCREEN_TICKS_PER_FRAME)
+            {
+                time_to_wait = SCREEN_TICKS_PER_FRAME - delta_time;
+                SDL_Delay(time_to_wait);
+                delta_time = SCREEN_TICKS_PER_FRAME;
+            }
+            snprintf(text, sizeof(text), "       time_waited: %d\n",time_to_wait);
+            OutputDebugStringA(text);
+            SDL_RenderPresent(render_buffer.renderer);
+            render_buffer.last_frame_time = SDL_GetTicks();
+        }
         memcpy(render_buffer.pixels, buffer.pixels, buffer_memory_size);
         render_thread = SDL_CreateThread(Win_Render, "Render", (void*) (&render_buffer));
-
+        if (frames % GIFFER_FRAME_RATE == GIFFER_FRAME_RATE / 2)
+        {
+            if (giffer_thread != NULL)
+            {
+                SDL_WaitThread(giffer_thread, &thread_return_value);
+            }
+            if (frames / GIFFER_FRAME_RATE > 3)
+            {
+                Giffer_End(giffer.memory);
+                giffer_thread = NULL;
+                game_is_running = false;
+            }
+            else
+            {
+                memcpy(giffer.buffer.pixels, buffer.pixels, buffer_memory_size);
+                giffer_thread = SDL_CreateThread(Win_Giffer, "Giffer", (void*) (&giffer));
+            }
+        }
+        frames++;
 		{
 			GAME_INPUT* tmp = old_input;
 			old_input = new_input;
