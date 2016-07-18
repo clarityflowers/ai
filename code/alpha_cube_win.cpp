@@ -13,7 +13,7 @@
 #define SCREEN_WIDTH 256
 #define SCREEN_HEIGHT 240
 #define SCREEN_FPS 30
-#define GIFFER_FRAME_RATE 30
+#define GIFFER_FRAME_RATE 1
 #define SCREEN_TICKS_PER_FRAME 33
 
 
@@ -210,6 +210,7 @@ WinMain(
 	SDL_Renderer *renderer;
 	SDL_Texture *texture;
     uint64 timer;
+    bool32 recording_gif = false;
 
 	LPVOID base_address;
 	GAME_MEMORY game_memory = {};
@@ -232,9 +233,6 @@ WinMain(
 	Win_BuildEXEPathFileName(&state, "alpha_cube.dll", sizeof(source_game_code_dll_full_path), source_game_code_dll_full_path);
 	Win_BuildEXEPathFileName(&state, "alpha_cube_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
 	game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
-
-    giffer.memory = Giffer_Init(SCREEN_WIDTH, SCREEN_HEIGHT, 1, (uint16)(SCREEN_TICKS_PER_FRAME * GIFFER_FRAME_RATE / 10));
-
 
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
     {
@@ -351,6 +349,10 @@ WinMain(
                         {
 							Win_LogKeyPress(&(new_keyboard->clear_board), &event);
                         } break;
+                        case SDLK_F9:
+                        {
+                            Win_LogKeyPress(&(new_keyboard->record_gif), &event);
+                        } break;
                         case SDLK_ESCAPE:
                         {
 							Win_LogKeyPress(&(new_keyboard->escape), &event);
@@ -363,6 +365,19 @@ WinMain(
 				}
 			}
 		}
+
+        {
+            GAME_BUTTON_STATE *button = &(new_keyboard->record_gif);
+            if (button->transitions >= 1)
+            {
+                button->transitions--;
+                button->is_down = !button->is_down;
+                if (button->is_down)
+                {
+                    recording_gif = !recording_gif;
+                }
+            }
+        }
 
 		new_dll_write_time = Win_GetLastWriteTime(source_game_code_dll_full_path);
 		if (CompareFileTime(&new_dll_write_time, &game.dll_last_write_time) != 0)
@@ -382,10 +397,12 @@ WinMain(
         {
             fps += fps_tracker[i];
         }
-        fps = (1.0 / (fps / ArrayCount(fps_tracker))) * 1000.0;
-        char out_buffer[256];
-        snprintf(out_buffer, sizeof(out_buffer), "           %.02f fps\n", fps);
-        OutputDebugStringA(out_buffer);
+        {
+            fps = (1.0 / (fps / ArrayCount(fps_tracker))) * 1000.0;
+            char out_buffer[256];
+            snprintf(out_buffer, sizeof(out_buffer), "           %.02f fps\n", fps);
+            OutputDebugStringA(out_buffer);
+        }
 
 		game_is_running = game_is_running && game.UpdateAndRender(&game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
         if (render_thread != NULL)
@@ -412,22 +429,29 @@ WinMain(
         }
         memcpy(render_buffer.pixels, buffer.pixels, buffer_memory_size);
         render_thread = SDL_CreateThread(Win_Render, "Render", (void*) (&render_buffer));
-        if (frames % GIFFER_FRAME_RATE == GIFFER_FRAME_RATE / 2)
+        if (frames % GIFFER_FRAME_RATE == 0)
         {
             if (giffer_thread != NULL)
             {
                 SDL_WaitThread(giffer_thread, &thread_return_value);
             }
-            if (frames / GIFFER_FRAME_RATE > 3)
+            if (recording_gif)
+            {
+                if (giffer.memory == NULL)
+                {
+                    giffer.memory = Giffer_Init(SCREEN_WIDTH, SCREEN_HEIGHT, 1, (uint16)(SCREEN_TICKS_PER_FRAME * GIFFER_FRAME_RATE / 10));
+                }
+                else
+                {
+                    memcpy(giffer.buffer.pixels, buffer.pixels, buffer_memory_size);
+                    giffer_thread = SDL_CreateThread(Win_Giffer, "Giffer", (void*) (&giffer));
+                }
+            }
+            else if(giffer.memory != NULL)
             {
                 Giffer_End(giffer.memory);
+                giffer.memory = NULL;
                 giffer_thread = NULL;
-                game_is_running = false;
-            }
-            else
-            {
-                memcpy(giffer.buffer.pixels, buffer.pixels, buffer_memory_size);
-                giffer_thread = SDL_CreateThread(Win_Giffer, "Giffer", (void*) (&giffer));
             }
         }
         frames++;

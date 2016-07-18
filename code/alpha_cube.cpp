@@ -12,8 +12,6 @@
 
 #define BOARD_X 88
 #define BOARD_Y 40
-#define BOARD_WIDTH 10
-#define BOARD_HEIGHT 20
 
 //******************************************************************************
 //**************************** PROFILER ****************************************
@@ -102,6 +100,25 @@ int InitColors(GAME_STATE* game_state)
     return 1;
 }
 
+
+//******************************************************************************
+//**************************** BLOCKS ******************************************
+//******************************************************************************
+
+int GetBlockLanding(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int x, int y)
+{
+    int col;
+
+    for (col=y; col > 0; col--)
+    {
+        if (board[col - 1][x])
+        {
+            break;
+        }
+    }
+    return col;
+}
+
 //******************************************************************************
 //**************************** DRAW ********************************************
 //******************************************************************************
@@ -166,6 +183,12 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y)
     DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 7, 3);
 }
 
+void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, int x, int y, int landing)
+{
+    DrawTile(buffer, x, y);
+    DrawRect(buffer, BOARD_X + (8*x), BOARD_Y + (8*landing), 8, 8, 0);
+}
+
 //******************************************************************************
 //**************************** MAIN ********************************************
 //******************************************************************************
@@ -191,8 +214,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         buffer->pitch = 2 * GAME_WIDTH / 8;
         memory->is_initialized = true;
         game_state->block_x = 5;
+        game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
         game_state->block_y = 19;
-        game_state->fall_speed = 1000.0f;
+        game_state->fall_speed = 500.0f;
         game_state->fall_time = 0.0f;
         InitColors(game_state);
     }
@@ -242,6 +266,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 if (button->is_down && game_state->block_x < BOARD_WIDTH - 1 && !game_state->board[game_state->block_y][game_state->block_x + 1])
                 {
                     game_state->block_x++;
+                    game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
                     if (game_state->block_y >= 0 && game_state->board[game_state->block_y - 1][game_state->block_x])
                     {
                         game_state->fall_time = 0.0f;
@@ -258,6 +283,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 if (button->is_down && game_state->block_x > 0 && !game_state->board[game_state->block_y][game_state->block_x - 1])
                 {
                     game_state->block_x--;
+                    game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
                     if (game_state->block_y >= 0 && game_state->board[game_state->block_y - 1][game_state->block_x])
                     {
                         game_state->fall_time = 0.0f;
@@ -271,8 +297,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 button->transitions--;
                 button->is_down = !button->is_down;
+                if (button->is_down)
+                {
+                    game_state->block_y = game_state->block_landing;
+                    game_state->fall_time = game_state->fall_speed;
+                }
             }
-            game_state->fall_quickly = button->is_down;
+            // game_state->fall_quickly = button->is_down;
         }
         {
             GAME_BUTTON_STATE *button = &(keyboard->clear_board);
@@ -308,16 +339,43 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
+                int row, col;
+
                 game_state->board[game_state->block_y][game_state->block_x] = true;
-                game_state->block_y = 20;
+                row = game_state->block_y;
+                col = 0;
+                while(col < BOARD_WIDTH && game_state->board[row][col])
+                {
+                    col++;
+                }
+                if (col == BOARD_WIDTH)
+                {
+                    for (col=0; col < BOARD_WIDTH; col++)
+                    {
+                        game_state->board[row][col] = false;
+                    }
+                    for (row = row ; row < BOARD_HEIGHT - 1; row++)
+                    {
+                        for (col=0; col < BOARD_WIDTH; col++)
+                        {
+                            game_state->board[row][col] = game_state->board[row+1][col];
+                        }
+                    }
+                    for (col=0; col < BOARD_WIDTH; col++)
+                    {
+                        game_state->board[row][col] = false;
+                    }
+                }
+                game_state->block_y = 19;
                 game_state->block_x = 5;
+                game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
             }
             game_state->fall_time -= fall_speed;
         }
     }
 
 
-    DrawTile(buffer, game_state->block_x, game_state->block_y);
+    DrawCurrentBlock(buffer, game_state->block_x, game_state->block_y, game_state->block_landing);
 
 
     // DRAW ONTO BACKBUFFER

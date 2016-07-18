@@ -36,6 +36,10 @@ typedef double real64;
 #define Terabytes(Value) (Gigabytes(Value)*1024LL)
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
+
+#define BOARD_WIDTH 10
+#define BOARD_HEIGHT 20
+
 struct GAME_BUTTON_STATE
 {
     bool32 is_down;
@@ -56,6 +60,7 @@ struct GAME_CONTROLLER_INPUT
             GAME_BUTTON_STATE drop;
             GAME_BUTTON_STATE clear_board;
             GAME_BUTTON_STATE escape;
+            GAME_BUTTON_STATE record_gif;
         };
     };
 };
@@ -96,10 +101,11 @@ struct GAME_STATE
 {
     RGBA_COLOR palettes[2][4];
     PIXEL_BACKBUFFER buffer;
-    bool32 board[20][10];
+    bool32 board[BOARD_HEIGHT][BOARD_WIDTH];
     int frames;
     int block_x;
     int block_y;
+    int block_landing;
     float fall_speed;
     float fall_time;
     bool32 fall_quickly;
