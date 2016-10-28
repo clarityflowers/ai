@@ -92,6 +92,9 @@ struct GAME_MEMORY
 #define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 
+#define GAME_GET_SOUND_SAMPLES(name) void name( GAME_MEMORY *memory, uint8 *stream, int len )
+typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
+
 struct RGBA_COLOR
 {
     uint8 r,g,b,a;

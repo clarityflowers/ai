@@ -193,6 +193,22 @@ void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, int x, int y, int landing)
 //**************************** MAIN ********************************************
 //******************************************************************************
 
+GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
+{
+    for (int i=0; i<len; i++)
+    {
+        uint8 value;
+		int size = len / 16;
+        if (i % size < size / 2) {
+            value = 0;
+        }
+        else {
+            value = 10;
+        }
+        stream[i] = value;
+    }
+}
+
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     GAME_STATE *game_state;

@@ -32,7 +32,7 @@ struct WIN_GAME_CODE
 	FILETIME dll_last_write_time;
 
 	game_update_and_render *UpdateAndRender;
-	// game_get_sound_samples *GetSoundSamples;
+	game_get_sound_samples *GetSoundSamples;
 
 	bool32 is_valid;
 };

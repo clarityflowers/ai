@@ -133,13 +133,13 @@ Win_LoadGameCode(char *source_dll_name, char *temp_dll_name)
 	if(result.dll)
 	{
 		result.UpdateAndRender = (game_update_and_render *)GetProcAddress(result.dll, "GameUpdateAndRender" );
-		// Result.GetSoundSamples = (game_get_sound_samples *)GetProcAddress(Result.DLL, "GameGetSoundSamples" );
-		result.is_valid = 1; //(Result.UpdateAndRender && Result.GetSoundSamples);
+		result.GetSoundSamples = (game_get_sound_samples *)GetProcAddress(result.dll, "GameGetSoundSamples" );
+		result.is_valid = (result.UpdateAndRender && result.GetSoundSamples);
 	}
 	if(!result.is_valid)
 	{
 		result.UpdateAndRender = 0;
-		//Result.GetSoundSamples = 0;
+		result.GetSoundSamples = 0;
 	}
 	return result;
 }
@@ -154,7 +154,7 @@ Win_UnloadGameCode(WIN_GAME_CODE *game_code)
 
 	game_code->is_valid = false;
 	game_code->UpdateAndRender = 0;
-	//GameCode->GetSoundSamples = 0;
+	game_code->GetSoundSamples = 0;
 }
 
 
@@ -193,6 +193,8 @@ Win_Giffer(void *data)
     Giffer_Frame(giffer->memory, (uint8*) giffer->buffer.pixels);
     return 0;
 }
+
+
 
 int CALLBACK
 WinMain(
@@ -234,7 +236,7 @@ WinMain(
 	Win_BuildEXEPathFileName(&state, "alpha_cube_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
 	game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
 
-	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
+	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO ) < 0 )
     {
 		exit(1);
 		// TODO (Cerisa): Logging
@@ -246,6 +248,30 @@ WinMain(
 		exit(1);
 		// TODO (Cerisa): Logging
 	}
+
+    SDL_AudioSpec audiospec_want;
+    SDL_AudioSpec audiospec_have;
+    SDL_AudioDeviceID audio;
+    memset(&audiospec_want, 0, sizeof(SDL_AudioSpec));
+    audiospec_want.freq = 48000;
+    audiospec_want.format = AUDIO_U8;
+    audiospec_want.channels = 1;
+    audiospec_want.samples = 4096;
+    audiospec_want.callback = (SDL_AudioCallback) game.GetSoundSamples;
+    audio = SDL_OpenAudioDevice(NULL, 0, &audiospec_want, &audiospec_have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+    if (audio == 0)
+    {
+		char error[256];
+	    snprintf(error, sizeof(error), "Audio failed: %s\n", SDL_GetError());
+		OutputDebugStringA(error);
+		exit(1);
+    }
+    if (audiospec_have.format != audiospec_want.format) {
+    	char error[256];
+        snprintf(error, sizeof(error), "Didn't get desired format");
+    	OutputDebugStringA(error);
+    }
+    SDL_PauseAudioDevice(audio, 0);
 
 	renderer = SDL_CreateRenderer(window, -1, 0);
 	if (renderer == 0)
@@ -259,7 +285,7 @@ WinMain(
 	if (texture == 0)
 	{
 		char error[256];
-	    snprintf(error, sizeof(error), "CreateTextureFromSruface failed: %s\n", SDL_GetError());
+	    snprintf(error, sizeof(error), "CreateTextureFromSurface failed: %s\n", SDL_GetError());
 		OutputDebugStringA(error);
 		exit(1);
 	}
