@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <SDL.h>
+#include <math.h>
 
 #define GAME_HEIGHT 240
 #define GAME_WIDTH 256
@@ -33,12 +34,12 @@ StopProfiler(uint64 start_time, bool32 print)
     time_difference = end_time - start_time;
     performance_frequency = SDL_GetPerformanceFrequency();
     milliseconds = (time_difference * 1000.0) / performance_frequency;
-    if (print)
-    {
-        char FPSBuffer[256];
-        snprintf(FPSBuffer, sizeof(FPSBuffer), "%.02f ms elapsed\n", milliseconds);
-        OutputDebugStringA(FPSBuffer);
-    }
+    // if (print)
+    // {
+    //     char FPSBuffer[256];
+    //     snprintf(FPSBuffer, sizeof(FPSBuffer), "%.02f ms elapsed\n", milliseconds);
+    //     OutputDebugStringA(FPSBuffer);
+    // }
 
     return milliseconds;
 }
@@ -78,11 +79,11 @@ void* AllocatePermanentStorage(GAME_MEMORY* memory, int size)
 //**************************** INIT ********************************************
 //******************************************************************************
 
-int InitColors(GAME_STATE* game_state)
+int InitColors(GAME_STATE* state)
 {
     int i=0;
     {
-        RGBA_COLOR* palette = game_state->palettes[i++];
+        RGBA_COLOR* palette = state->palettes[i++];
         int j=0;
         palette[j++] = {0x9C, 0xBD, 0x0F, 0xFF};
         palette[j++] = {0x8C, 0xAD, 0x0F, 0xFF};
@@ -90,7 +91,7 @@ int InitColors(GAME_STATE* game_state)
         palette[j++] = {0x0F, 0x38, 0x0F, 0xFF};
     }
     {
-        RGBA_COLOR* palette = game_state->palettes[i++];
+        RGBA_COLOR* palette = state->palettes[i++];
         int j=0;
         palette[j++] = {0xf8, 0xf7, 0xd8, 0xFF};
         palette[j++] = {0xce, 0x89, 0x6a, 0xFF};
@@ -193,25 +194,139 @@ void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, int x, int y, int landing)
 //**************************** MAIN ********************************************
 //******************************************************************************
 
+void SinWave(GAME_AUDIO* audio, float32* stream, uint64 length, float frequency, float amplitude, void* memory)
+{
+    SIN_STATE* state = (SIN_STATE*) memory;
+    uint32 samples_per_second = audio->samples_per_tick * 1000;
+    float32 period = samples_per_second / frequency;
+    float32 sample_frequency = frequency / samples_per_second;
+    float32 step = sample_frequency * Tau32;
+    for (uint32 i=0; i<length; i++)
+    {
+        *stream += ((float32)sin(state->x) * amplitude);
+        stream++;
+        state->x += step;
+        while (state->x > Tau32)
+        {
+            state->x -= Tau32;
+        }
+    }
+}
+
+void Instrument(GAME_AUDIO* audio, float32* stream, uint64 length, float frequency, float amplitude, void* memory)
+{
+    INSTRUMENT_STATE* state = (INSTRUMENT_STATE*) memory;
+    SinWave(audio, stream, length, frequency * 2.0f, amplitude * 0.1f, &(state->sins[0]));
+    SinWave(audio, stream, length, frequency, amplitude * 0.5f, &(state->sins[1]));
+}
+
+// AUDIO_CLOCK ClockAdd(AUDIO_CLOCK clock, int meter, uint64 samples_per_beat, uint64 samples)
+// {
+//     AUDIO_CLOCK result = {};
+//
+//     result.samples = clock.samples + samples;
+//     result.beat = clock.beat;
+//     result.measure = clock.measure;
+//     while (result.samples >= samples_per_beat)
+//     {
+//         result.samples -= samples_per_beat;
+//         result.beat++;
+//         if (result.beat >= meter)
+//         {
+//             result.beat -= meter;
+//             result.measure++;
+//         }
+//     }
+//     return result;
+// }
+
+
+int beat(AUDIO_CLOCK clock)
+{
+    if (clock.samples_per_beat == 0)
+    {
+        return 0;
+    }
+    else
+    {
+        return (int)(clock.samples / clock.samples_per_beat);
+    }
+}
+
+uint64 samples(AUDIO_CLOCK clock, float32 beats)
+{
+    return (uint64)(beats * clock.samples_per_beat);
+}
+
+uint64 samples(AUDIO_CLOCK clock, int measures, float32 beats)
+{
+    return samples(clock, measures * clock.meter + beats);
+}
+
+void Sound(GAME_AUDIO* audio, float32* stream, uint64 duration, float frequency, float amplitude, void* memory)
+{
+
+}
+
+void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
+{
+    float32 *stream;
+    AUDIO_CLOCK *clock = &(state->clock);
+    AUDIO_CLOCK cursor;
+
+    float32 samples_per_minute = (float32)(audio->samples_per_tick * 1000 * 60);
+    clock->samples_per_beat = samples_per_minute / clock->bpm;
+    clock->samples += ticks * audio->samples_per_tick;
+
+    cursor = *clock;
+
+    if (audio->written > ticks * audio->samples_per_tick)
+    {
+        audio->written -= ticks * audio->samples_per_tick;
+        cursor.samples += audio->written;
+    }
+    {
+        char text[256];
+        snprintf(text, sizeof(text), "%d ticks elapsed\n", ticks);
+        OutputDebugStringA(text);
+    }
+    uint64 start = cursor.samples;
+    uint64 end = cursor.samples + audio->size;
+    stream = (float32*)audio->stream;
+    uint64 m = 0;
+    while(cursor.samples < end)
+    {
+        m += samples(cursor, 1.0f);
+        // samples, start, end, m, audio, &stream[i], pitch, amplitude, state
+        if (cursor.samples < end && cursor.samples < m) {
+            uint64 length = min(m - cursor.samples, end - cursor.samples);
+            Instrument(audio, &stream[cursor.samples - start], length, 220.0f, 0.5f, &(state->instrument));
+            cursor.samples += length;
+        }
+        m += samples(cursor, 1.0f);
+        if (cursor.samples < end && cursor.samples < m) {
+            uint64 length = min(m - cursor.samples, end - cursor.samples);
+            Instrument(audio, &stream[cursor.samples - start], length, 440.0f, 0.5f, &(state->instrument));
+            cursor.samples += length;
+        }
+    }
+    audio->written += audio->size;
+}
+
 GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
 {
-    for (int i=0; i<len; i++)
+    GAME_STATE *state;
+    state = (GAME_STATE*) memory->permanent_storage;
+    if (state != 0)
     {
-        uint8 value;
-		int size = len / 16;
-        if (i % size < size / 2) {
-            value = 0;
-        }
-        else {
-            value = 10;
-        }
-        stream[i] = value;
+        memset(audio->stream, 0, audio->size * audio->depth);
+        GetSound(audio, state, ticks);
     }
 }
 
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
-    GAME_STATE *game_state;
+    GAME_STATE *state;
     PIXEL_BACKBUFFER *buffer;
     void* pixels;
     uint64 timer;
@@ -219,8 +334,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     timer = StartProfiler();
     Assert(sizeof(GAME_STATE) <= memory->permanent_storage_size);
-    game_state = (GAME_STATE*) memory->permanent_storage;
-    buffer = &(game_state->buffer);
+    state = (GAME_STATE*) memory->permanent_storage;
+    buffer = &(state->buffer);
 
 
     if (!memory->is_initialized)
@@ -229,14 +344,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         buffer->pixels = AllocatePermanentStorage(memory,  (2 * GAME_WIDTH * GAME_HEIGHT) / 8);
         buffer->pitch = 2 * GAME_WIDTH / 8;
         memory->is_initialized = true;
-        game_state->block_x = 5;
-        game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
-        game_state->block_y = 19;
-        game_state->fall_speed = 500.0f;
-        game_state->fall_time = 0.0f;
-        InitColors(game_state);
+        state->block_x = 5;
+        state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
+        state->block_y = 19;
+        state->is_moving = false;
+        state->clock.bpm = 120.0f;
+        state->clock.meter = 4;
+        InitColors(state);
     }
 
+    int new_beats = beat(state->clock);
+    int beats = max(new_beats - state->beats, 0);
+    state->beats = new_beats;
 
     pixels = buffer->pixels;
 
@@ -250,7 +369,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             for (int col=0; col < BOARD_WIDTH; col++)
             {
-                if (game_state->board[row][col])
+                if (state->board[row][col])
                 {
                     DrawTile(buffer, col, row);
                 }
@@ -279,13 +398,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 button->transitions--;
                 button->is_down = !button->is_down;
-                if (button->is_down && game_state->block_x < BOARD_WIDTH - 1 && !game_state->board[game_state->block_y][game_state->block_x + 1])
+                if (button->is_down && state->block_x < BOARD_WIDTH - 1 && !state->board[state->block_y][state->block_x + 1])
                 {
-                    game_state->block_x++;
-                    game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
-                    if (game_state->block_y >= 0 && game_state->board[game_state->block_y - 1][game_state->block_x])
+                    state->block_x++;
+                    state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
+                    if (state->block_y >= 0 && state->board[state->block_y - 1][state->block_x])
                     {
-                        game_state->fall_time = 0.0f;
+                        state->is_moving = true;
                     }
                 }
             }
@@ -296,13 +415,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 button->transitions--;
                 button->is_down = !button->is_down;
-                if (button->is_down && game_state->block_x > 0 && !game_state->board[game_state->block_y][game_state->block_x - 1])
+                if (button->is_down && state->block_x > 0 && !state->board[state->block_y][state->block_x - 1])
                 {
-                    game_state->block_x--;
-                    game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
-                    if (game_state->block_y >= 0 && game_state->board[game_state->block_y - 1][game_state->block_x])
+                    state->block_x--;
+                    state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
+                    if (state->block_y >= 0 && state->board[state->block_y - 1][state->block_x])
                     {
-                        game_state->fall_time = 0.0f;
+                        state->is_moving = true;
                     }
                 }
             }
@@ -315,11 +434,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 button->is_down = !button->is_down;
                 if (button->is_down)
                 {
-                    game_state->block_y = game_state->block_landing;
-                    game_state->fall_time = game_state->fall_speed;
+                    state->block_y = state->block_landing;
                 }
             }
-            // game_state->fall_quickly = button->is_down;
         }
         {
             GAME_BUTTON_STATE *button = &(keyboard->clear_board);
@@ -329,7 +446,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 button->is_down = !button->is_down;
                 if (button->is_down)
                 {
-                    memset(game_state->board, 0, sizeof(game_state->board)[0][0] * BOARD_WIDTH * BOARD_HEIGHT);
+                    memset(state->board, 0, sizeof(state->board)[0][0] * BOARD_WIDTH * BOARD_HEIGHT);
                 }
             }
         }
@@ -337,30 +454,24 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // BLOCKS FALL
     {
-        float fall_speed = game_state->fall_speed;
-        if (game_state->fall_quickly)
+        while (beats--)
         {
-            fall_speed = Min(100.0f, fall_speed / 2.0f);
-            while (game_state->fall_time > fall_speed * 2.0f)
+            if (state->is_moving)
             {
-                game_state->fall_time -= fall_speed;
+                state->is_moving = false;
             }
-        }
-        game_state->fall_time += delta_time;
-        if (game_state->fall_time >= fall_speed)
-        {
-            if (game_state->block_y > 0 && !game_state->board[game_state->block_y - 1][game_state->block_x])
+            else if (state->block_y > 0 && !state->board[state->block_y - 1][state->block_x])
             {
-                game_state->block_y--;
+                state->block_y--;
             }
             else
             {
                 int row, col;
 
-                game_state->board[game_state->block_y][game_state->block_x] = true;
-                row = game_state->block_y;
+                state->board[state->block_y][state->block_x] = true;
+                row = state->block_y;
                 col = 0;
-                while(col < BOARD_WIDTH && game_state->board[row][col])
+                while(col < BOARD_WIDTH && state->board[row][col])
                 {
                     col++;
                 }
@@ -368,30 +479,28 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 {
                     for (col=0; col < BOARD_WIDTH; col++)
                     {
-                        game_state->board[row][col] = false;
+                        state->board[row][col] = false;
                     }
                     for (row = row ; row < BOARD_HEIGHT - 1; row++)
                     {
                         for (col=0; col < BOARD_WIDTH; col++)
                         {
-                            game_state->board[row][col] = game_state->board[row+1][col];
+                            state->board[row][col] = state->board[row+1][col];
                         }
                     }
                     for (col=0; col < BOARD_WIDTH; col++)
                     {
-                        game_state->board[row][col] = false;
+                        state->board[row][col] = false;
                     }
                 }
-                game_state->block_y = 19;
-                game_state->block_x = 5;
-                game_state->block_landing = GetBlockLanding(game_state->board, game_state->block_x, game_state->block_y);
+                state->block_y = 19;
+                state->block_x = 5;
+                state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
             }
-            game_state->fall_time -= fall_speed;
         }
     }
 
-
-    DrawCurrentBlock(buffer, game_state->block_x, game_state->block_y, game_state->block_landing);
+    DrawCurrentBlock(buffer, state->block_x, state->block_y, state->block_landing);
 
 
     // DRAW ONTO BACKBUFFER
@@ -426,7 +535,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 RGBA_COLOR color;
 
                 color_index = (pixel_quad_value) & 3;
-                color = game_state->palettes[palette][color_index];
+                color = state->palettes[palette][color_index];
                 render_row = render_pixels + (x + (y*render_buffer->w));
                 for (int i=0; i < scale_factor; i++)
                 {

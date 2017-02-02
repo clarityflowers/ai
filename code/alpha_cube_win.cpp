@@ -32,14 +32,16 @@ StopProfiler(uint64 start_time)
 {
     uint64 end_time, time_difference, performance_frequency;
     double milliseconds;
-    char buffer[256];
 
     end_time = SDL_GetPerformanceCounter();
     time_difference = end_time - start_time;
     performance_frequency = SDL_GetPerformanceFrequency();
     milliseconds = (time_difference * 1000.0) / performance_frequency;
-    snprintf(buffer, sizeof(buffer), "%.02f ms elapsed\n", milliseconds);
-    OutputDebugStringA(buffer);
+    // {
+    //     char buffer[256];
+    //     snprintf(buffer, sizeof(buffer), "%.02f ms elapsed\n", milliseconds);
+    //     OutputDebugStringA(buffer);
+    // }
 
     return milliseconds;
 }
@@ -221,6 +223,7 @@ WinMain(
 	// uint32 delta_time = 0;
 	int pitch = NULL;
 	PIXEL_BACKBUFFER buffer = {};
+    GAME_AUDIO game_audio = {};
     WIN_RENDER_BUFFER render_buffer = {};
     WIN_GIFFER giffer = {};
 	GAME_INPUT input[2] = {};
@@ -253,11 +256,10 @@ WinMain(
     SDL_AudioSpec audiospec_have;
     SDL_AudioDeviceID audio;
     memset(&audiospec_want, 0, sizeof(SDL_AudioSpec));
+    audiospec_want.samples = 1024;
     audiospec_want.freq = 48000;
-    audiospec_want.format = AUDIO_U8;
+    audiospec_want.format = AUDIO_F32SYS;
     audiospec_want.channels = 1;
-    audiospec_want.samples = 4096;
-    audiospec_want.callback = (SDL_AudioCallback) game.GetSoundSamples;
     audio = SDL_OpenAudioDevice(NULL, 0, &audiospec_want, &audiospec_have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
     if (audio == 0)
     {
@@ -297,6 +299,9 @@ WinMain(
 	buffer.pitch = buffer.depth * buffer.w;
     render_buffer.pitch = buffer.pitch;
 	// SDL_LockTexture(texture, 0, &(buffer.pixels), &(buffer.pitch));
+    game_audio.size = 1024;
+    game_audio.depth = 4;
+    game_audio.samples_per_tick = 48;
 
 #if ALPHA_CUBE_INTERNAL
 	base_address = 0;
@@ -319,6 +324,9 @@ WinMain(
     giffer.buffer.w = buffer.w;
     giffer.buffer.h = buffer.h;
 
+    int game_audio_buffer_size = (game_audio.size * game_audio.depth);
+    game_audio.stream = VirtualAlloc(0, game_audio_buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
 	game_is_running = true;
 	render_buffer.last_frame_time = SDL_GetTicks();
     timer = StartProfiler();
@@ -326,6 +334,7 @@ WinMain(
     double fps_tracker[10] = {};
     int fps_tracker_index = 0;
     int frames = 0;
+    uint32 last_sound_time = SDL_GetTicks();
 	while (game_is_running)
 	{
 
@@ -423,33 +432,56 @@ WinMain(
         {
             fps += fps_tracker[i];
         }
-        {
-            fps = (1.0 / (fps / ArrayCount(fps_tracker))) * 1000.0;
-            char out_buffer[256];
-            snprintf(out_buffer, sizeof(out_buffer), "           %.02f fps\n", fps);
-            OutputDebugStringA(out_buffer);
-        }
+        // {
+        //     fps = (1.0 / (fps / ArrayCount(fps_tracker))) * 1000.0;
+        //     char out_buffer[256];
+        //     snprintf(out_buffer, sizeof(out_buffer), "           %.02f fps\n", fps);
+        //     OutputDebugStringA(out_buffer);
+        // }
 
 		game_is_running = game_is_running && game.UpdateAndRender(&game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
+
+        uint32 queued_audio = SDL_GetQueuedAudioSize(audio);
+        {
+            char out_buffer[256];
+            snprintf(out_buffer, sizeof(out_buffer), "queud audio: %d\n", queued_audio);
+            OutputDebugStringA(out_buffer);
+        }
+        while (queued_audio <= 1024 * 4 * 2)
+        {
+            uint32 current_sound_time = SDL_GetTicks();
+            uint32 sound_time_elapsed = current_sound_time - last_sound_time;
+            game.GetSoundSamples(&game_memory, &game_audio, sound_time_elapsed);
+            SDL_QueueAudio(audio, game_audio.stream, game_audio.size * game_audio.depth);
+            queued_audio = SDL_GetQueuedAudioSize(audio);
+            last_sound_time = current_sound_time;
+        }
+        uint32 delta_time;
         if (render_thread != NULL)
         {
-            uint32 current_frame_time, delta_time, time_to_wait;
-            char text[256];
+            uint32 current_frame_time, time_to_wait;
 
             time_to_wait = 0;
             SDL_WaitThread(render_thread, &thread_return_value);
             current_frame_time = SDL_GetTicks();
             delta_time = current_frame_time - render_buffer.last_frame_time;
-            snprintf(text, sizeof(text), "current_frame_time: %d\n   last_frame_time: %d\n        delta_time: %d\n", current_frame_time, render_buffer.last_frame_time, delta_time);
-            OutputDebugStringA(text);
+            // {
+            //     char text[256];
+            //     snprintf(text, sizeof(text), "current_frame_time: %d\n   last_frame_time: %d\n        delta_time: %d\n", current_frame_time, render_buffer.last_frame_time, delta_time);
+            //     OutputDebugStringA(text);
+            // }
             if (delta_time < SCREEN_TICKS_PER_FRAME)
             {
                 time_to_wait = SCREEN_TICKS_PER_FRAME - delta_time;
                 SDL_Delay(time_to_wait);
-                delta_time = SCREEN_TICKS_PER_FRAME;
+                current_frame_time = SDL_GetTicks();
+                delta_time = current_frame_time - render_buffer.last_frame_time;
             }
-            snprintf(text, sizeof(text), "       time_waited: %d\n",time_to_wait);
-            OutputDebugStringA(text);
+            {
+                // char text[256];
+                // snprintf(text, sizeof(text), "       time_waited: %d\n",time_to_wait);
+                // OutputDebugStringA(text);
+            }
             SDL_RenderPresent(render_buffer.renderer);
             render_buffer.last_frame_time = SDL_GetTicks();
         }
@@ -486,12 +518,13 @@ WinMain(
 			old_input = new_input;
 			new_input = tmp;
 		}
-		OutputDebugStringA("\n");
+		OutputDebugStringA("\n\n");
 	}
     SDL_WaitThread(render_thread, &thread_return_value);
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
+    SDL_CloseAudioDevice(audio);
 	SDL_Quit();
 	Win_UnloadGameCode(&game);
 	VirtualFree(game_memory.permanent_storage, 0, MEM_RELEASE);

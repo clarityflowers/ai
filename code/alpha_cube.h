@@ -10,7 +10,8 @@
 #define Assert(Expression)
 #endif
 
-#define Pi32 3.1415926539f
+#define Pi32  3.1415926539f
+#define Tau32 6.2831853071f
 #define internal static
 #define local_persist static
 #define global_variable static
@@ -27,8 +28,8 @@ typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
 
-typedef float real32;
-typedef double real64;
+typedef float float32;
+typedef double float64;
 
 #define Kilobytes(Value) (Value*1024LL)
 #define Megabytes(Value) (Kilobytes(Value)*1024LL)
@@ -89,15 +90,45 @@ struct GAME_MEMORY
     int transient_storage_offset;
 };
 
+struct GAME_AUDIO
+{
+    void *stream;
+    uint32 size, depth, samples_per_tick;
+    uint64 written;
+};
+
 #define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 
-#define GAME_GET_SOUND_SAMPLES(name) void name( GAME_MEMORY *memory, uint8 *stream, int len )
+#define GAME_GET_SOUND_SAMPLES(name) void name( GAME_MEMORY *memory, GAME_AUDIO *audio, uint32 ticks)
 typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
 struct RGBA_COLOR
 {
     uint8 r,g,b,a;
+};
+
+struct AUDIO_CLOCK
+{
+    uint64 samples;
+    float32 bpm;
+    float32 samples_per_beat;
+    int meter;
+    int beat() {
+    }
+    int measure() {
+        return (int)((samples / samples_per_beat) / meter);
+    }
+};
+
+struct SIN_STATE
+{
+    float32 x;
+};
+
+struct INSTRUMENT_STATE
+{
+    SIN_STATE sins[2];
 };
 
 struct GAME_STATE
@@ -109,9 +140,10 @@ struct GAME_STATE
     int block_x;
     int block_y;
     int block_landing;
-    float fall_speed;
-    float fall_time;
-    bool32 fall_quickly;
+    bool32 is_moving;
+    INSTRUMENT_STATE instrument;
+    AUDIO_CLOCK clock;
+    int beats;
 };
 
 #define ALPHA_CUBE_H
