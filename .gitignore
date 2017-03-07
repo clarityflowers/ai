@@ -1,6 +1,4 @@
 .atom-build.yml
-debug.bat
-old*
 test.out
 handmade
-misc
+*old*
