@@ -241,7 +241,7 @@ void Instrument(GAME_AUDIO* audio, float32* stream, uint64 length, float frequen
 // }
 
 
-int beat(AUDIO_CLOCK clock)
+int Beat(AUDIO_CLOCK clock)
 {
     if (clock.samples_per_beat == 0)
     {
@@ -253,19 +253,14 @@ int beat(AUDIO_CLOCK clock)
     }
 }
 
-uint64 samples(AUDIO_CLOCK clock, float32 beats)
+uint64 Samples(AUDIO_CLOCK clock, float32 beats)
 {
     return (uint64)(beats * clock.samples_per_beat);
 }
 
-uint64 samples(AUDIO_CLOCK clock, int measures, float32 beats)
+uint64 Samples(AUDIO_CLOCK clock, int measures, float32 beats)
 {
-    return samples(clock, measures * clock.meter + beats);
-}
-
-void Sound(GAME_AUDIO* audio, float32* stream, uint64 duration, float frequency, float amplitude, void* memory)
-{
-
+    return Samples(clock, measures * clock.meter + beats);
 }
 
 void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
@@ -296,14 +291,14 @@ void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
     uint64 m = 0;
     while(cursor.samples < end)
     {
-        m += samples(cursor, 1.0f);
+        m += Samples(cursor, 1.0f);
         // samples, start, end, m, audio, &stream[i], pitch, amplitude, state
         if (cursor.samples < end && cursor.samples < m) {
             uint64 length = min(m - cursor.samples, end - cursor.samples);
             Instrument(audio, &stream[cursor.samples - start], length, 220.0f, 0.5f, &(state->instrument));
             cursor.samples += length;
         }
-        m += samples(cursor, 1.0f);
+        m += Samples(cursor, 1.0f);
         if (cursor.samples < end && cursor.samples < m) {
             uint64 length = min(m - cursor.samples, end - cursor.samples);
             Instrument(audio, &stream[cursor.samples - start], length, 440.0f, 0.5f, &(state->instrument));
@@ -311,6 +306,37 @@ void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
         }
     }
     audio->written += audio->size;
+}
+
+void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int block_x, int block_y)
+{
+    int row, col;
+
+    board[block_y][block_x] = true;
+    row = block_y;
+    col = 0;
+    while(col < BOARD_WIDTH && board[row][col])
+    {
+        col++;
+    }
+    if (col == BOARD_WIDTH)
+    {
+        for (col=0; col < BOARD_WIDTH; col++)
+        {
+            board[row][col] = false;
+        }
+        for (row = row ; row < BOARD_HEIGHT - 1; row++)
+        {
+            for (col=0; col < BOARD_WIDTH; col++)
+            {
+                board[row][col] = board[row+1][col];
+            }
+        }
+        for (col=0; col < BOARD_WIDTH; col++)
+        {
+            board[row][col] = false;
+        }
+    }
 }
 
 GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
@@ -434,7 +460,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 button->is_down = !button->is_down;
                 if (button->is_down)
                 {
-                    state->block_y = state->block_landing;
+                    PlaceBlock(state->board, state->block_x, state->block_landing);
+                    {
+                        state->block_y = 19;
+                        state->block_x = 5;
+                        state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
+                        state->clock.bpm += 1;
+                    }
                 }
             }
         }
@@ -466,36 +498,12 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
-                int row, col;
-
-                state->board[state->block_y][state->block_x] = true;
-                row = state->block_y;
-                col = 0;
-                while(col < BOARD_WIDTH && state->board[row][col])
+                PlaceBlock(state->board, state->block_x, state->block_y);
                 {
-                    col++;
+                    state->block_y = 19;
+                    state->block_x = 5;
+                    state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
                 }
-                if (col == BOARD_WIDTH)
-                {
-                    for (col=0; col < BOARD_WIDTH; col++)
-                    {
-                        state->board[row][col] = false;
-                    }
-                    for (row = row ; row < BOARD_HEIGHT - 1; row++)
-                    {
-                        for (col=0; col < BOARD_WIDTH; col++)
-                        {
-                            state->board[row][col] = state->board[row+1][col];
-                        }
-                    }
-                    for (col=0; col < BOARD_WIDTH; col++)
-                    {
-                        state->board[row][col] = false;
-                    }
-                }
-                state->block_y = 19;
-                state->block_x = 5;
-                state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
             }
         }
     }
