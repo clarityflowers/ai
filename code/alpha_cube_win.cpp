@@ -69,11 +69,11 @@ CatStrings(
  size_t dest_count, char *dest)
 {
 	// TODO(casey): Dest bounds checking!
-	for(int i = 0; i < source_a_count; ++i)
+	for(size_t i = 0; i < source_a_count; ++i)
 	{
 		*dest++ = *source_a++;
 	}
-	for(int Index = 0; Index < source_b_count; ++Index)
+	for(size_t Index = 0; Index < source_b_count; ++Index)
 	{
 		*dest++ = *source_b++;
 	}
