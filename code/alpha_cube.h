@@ -108,6 +108,7 @@ struct RGBA_COLOR
     uint8 r,g,b,a;
 };
 
+
 struct AUDIO_TIME
 {
     int beats;
@@ -124,10 +125,10 @@ struct AUDIO_TIME
         }
         return result;
     }
-    AUDIO_TIME Plus(float64 beatsToAdd)
+    AUDIO_TIME Plus(float64 add)
     {
         AUDIO_TIME result = *this;
-        result.time += beatsToAdd;
+        result.time += add;
         while (result.time >= 1.0)
         {
             result.beats++;
@@ -140,6 +141,16 @@ struct AUDIO_TIME
         AUDIO_TIME result = *this;
         result.beats -= other.beats;
         result.time -= other.time;
+        while (result.time < 0) {
+            result.beats--;
+            result.time += 1.0;
+        }
+        return result;
+    }
+    AUDIO_TIME Minus(float64 minus)
+    {
+        AUDIO_TIME result = *this;
+        result.time -= minus;
         while (result.time < 0) {
             result.beats--;
             result.time += 1.0;
@@ -163,6 +174,19 @@ struct AUDIO_TIME
     }
 };
 
+struct AUDIO_CURSOR
+{
+    AUDIO_TIME start;
+    AUDIO_TIME position;
+    uint64 written;
+    uint64 end;
+    float32 samples_per_beat;
+    GAME_AUDIO* audio;
+    uint32 samples_per_tick;
+    float32* stream;
+
+};
+
 struct AUDIO_CLOCK
 {
     AUDIO_TIME time;
@@ -181,6 +205,16 @@ struct INSTRUMENT_STATE
     SIN_STATE sins[2];
 };
 
+struct INSTRUMENT
+{
+    void* memory;
+    void (*Play)(
+        float32* stream, uint64 length,
+        uint32 samples_per_tick, float frequency, float amplitude,
+        void* memory
+    );
+};
+
 struct GAME_STATE
 {
     RGBA_COLOR palettes[2][4];
@@ -191,7 +225,8 @@ struct GAME_STATE
     int block_y;
     int block_landing;
     bool32 is_moving;
-    INSTRUMENT_STATE instrument;
+    INSTRUMENT_STATE instrument_state;
+    INSTRUMENT instrument;
     AUDIO_CLOCK clock;
     int beats;
 };

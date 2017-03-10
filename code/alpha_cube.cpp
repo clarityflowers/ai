@@ -194,10 +194,10 @@ void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, int x, int y, int landing)
 //**************************** MAIN ********************************************
 //******************************************************************************
 
-void SinWave(GAME_AUDIO* audio, float32* stream, uint64 length, float frequency, float amplitude, void* memory)
+void SinWave(float32* stream, uint64 length, uint32 samples_per_tick, float frequency, float amplitude, void* memory)
 {
     SIN_STATE* state = (SIN_STATE*) memory;
-    uint32 samples_per_second = audio->samples_per_tick * 1000;
+    uint32 samples_per_second = samples_per_tick * 1000;
     float32 period = samples_per_second / frequency;
     float32 sample_frequency = frequency / samples_per_second;
     float32 step = sample_frequency * Tau32;
@@ -213,62 +213,35 @@ void SinWave(GAME_AUDIO* audio, float32* stream, uint64 length, float frequency,
     }
 }
 
-void Instrument(GAME_AUDIO* audio, float32* stream, uint64 length, float frequency, float amplitude, void* memory)
+void Instrument(float32* stream, uint64 length, uint32 samples_per_tick, float frequency, float amplitude, void* memory)
 {
     INSTRUMENT_STATE* state = (INSTRUMENT_STATE*) memory;
-    SinWave(audio, stream, length, frequency * 2.0f, amplitude * 0.1f, &(state->sins[0]));
-    SinWave(audio, stream, length, frequency, amplitude * 0.5f, &(state->sins[1]));
+    SinWave(stream, length, samples_per_tick, frequency * 2.0f, amplitude * 0.1f, &(state->sins[0]));
+    SinWave(stream, length, samples_per_tick, frequency, amplitude * 0.5f, &(state->sins[1]));
 }
 
-// AUDIO_CLOCK ClockAdd(AUDIO_CLOCK clock, int meter, uint64 samples_per_beat, uint64 samples)
-// {
-//     AUDIO_CLOCK result = {};
-//
-//     result.samples = clock.samples + samples;
-//     result.beat = clock.beat;
-//     result.measure = clock.measure;
-//     while (result.samples >= samples_per_beat)
-//     {
-//         result.samples -= samples_per_beat;
-//         result.beat++;
-//         if (result.beat >= meter)
-//         {
-//             result.beat -= meter;
-//             result.measure++;
-//         }
-//     }
-//     return result;
-// }
+void Play(float64 time, AUDIO_CURSOR* cursor, float frequency, float amplitude, INSTRUMENT* instrument)
+{
+    if (cursor->written >= cursor->end)
+    {
+        return;
+    }
+    cursor->position = cursor->position.Plus(time);
+    if (cursor->position.LessThan(cursor->start))
+    {
+        return;
+    }
+    float64 diff = cursor->position.Minus(cursor->start).Time();
+    float64 time_to_play = min(diff, time);
+    uint64 length = min((uint64)(time_to_play * cursor->samples_per_beat), cursor->end - cursor->written);
+    instrument->Play(&(cursor->stream)[cursor->written], length, cursor->samples_per_tick, frequency, amplitude, instrument->memory);
+    cursor->written += length;
+}
 
-
-// int Beat(AUDIO_CLOCK clock)
-// {
-//     if (clock.samples_per_beat == 0)
-//     {
-//         return 0;
-//     }
-//     else
-//     {
-//         return (int)(clock.samples / clock.samples_per_beat);
-//     }
-// }
-
-// uint64 Samples(AUDIO_CLOCK clock, float32 beats)
-// {
-//     return (uint64)(beats * clock.samples_per_beat);
-// }
-//
-// uint64 Samples(AUDIO_CLOCK clock, int measures, float32 beats)
-// {
-//     return Samples(clock, measures * clock.meter + beats);
-// }
-
-// TODO: Audio clock needs to be measured in beats, not samples, because we need
-// to be able to change bpm.
 void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
 {
-    float32 *stream;
     AUDIO_CLOCK *clock = &(state->clock);
+    AUDIO_CURSOR cursor = {};
 
     float32 samples_per_minute = (float32)(audio->samples_per_tick * 1000 * 60);
     clock->samples_per_beat = samples_per_minute / clock->bpm;
@@ -276,34 +249,16 @@ void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
     clock->time = clock->time.Plus(elapsed);
     audio->written -= elapsed;
 
-    AUDIO_TIME cursor = clock->time.Plus(audio->written);
+    cursor.start = clock->time.Plus(audio->written);
+    cursor.end = audio->size;
+    cursor.samples_per_beat = clock->samples_per_beat;
+    cursor.samples_per_tick = audio->samples_per_tick;
+    cursor.stream = (float32*)audio->stream;
 
+    while(cursor.written < cursor.end)
     {
-        char text[256];
-        snprintf(text, sizeof(text), "%d ticks elapsed\n", ticks);
-        OutputDebugStringA(text);
-    }
-
-    uint64 written = 0;
-    uint64 end = audio->size;
-    stream = (float32*)audio->stream;
-    AUDIO_TIME m = {};
-    while(written < end)
-    {
-        m = m.Plus(1.0);
-        if (written < end && cursor.LessThan(m)) {
-            uint64 length = (uint64)min(m.Minus(cursor).Time() * clock->samples_per_beat, end - written);
-            Instrument(audio, &stream[written], length, 220.0f, 0.5f, &(state->instrument));
-            cursor = m;
-            written += length;
-        }
-        m = m.Plus(1.0);
-        if (written < end && cursor.LessThan(m)) {
-            uint64 length = (uint64)min(m.Minus(cursor).Time() * clock->samples_per_beat, end - written);
-            Instrument(audio, &stream[written], length, 440.0f, 0.5f, &(state->instrument));
-            cursor = m;
-            written += length;
-        }
+        Play(1.0, &cursor, 220.f, 0.5f, &(state->instrument));
+        Play(1.0, &cursor, 440.f, 0.5f, &(state->instrument));
     }
     audio->written += audio->size / clock->samples_per_beat;
 }
@@ -376,6 +331,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->is_moving = false;
         state->clock.bpm = 120.0f;
         state->clock.meter = 4;
+        state->instrument.memory = (void*)&(state->instrument_state);
+        state->instrument.Play = Instrument;
         InitColors(state);
     }
 
