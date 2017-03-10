@@ -191,7 +191,6 @@ struct AUDIO_CLOCK
 {
     AUDIO_TIME time;
     float32 bpm;
-    float32 samples_per_beat;
     int meter;
 };
 

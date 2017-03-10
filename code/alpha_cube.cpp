@@ -238,29 +238,125 @@ void Play(float64 time, AUDIO_CURSOR* cursor, float frequency, float amplitude, 
     cursor->written += length;
 }
 
+float32 AbsoluteNote(int note)
+{
+    return 440.0f * (float32)pow(2, (note - 69) / 12.0f);
+}
+
+int Minor(int note)
+{
+    switch (note)
+    {
+        case 0:
+            return 0;
+        case 1:
+            return 2;
+        case 2:
+            return 3;
+        case 3:
+            return 5;
+        case 4:
+            return 7;
+        case 5:
+            return 8;
+        case 6:
+            return 10;
+        default:
+            return 0;
+    }
+}
+
+float32 AMinor(int note, int accidental)
+{
+    int octave = note / 7;
+    int mod = note % 7;
+    if (mod < 0)
+    {
+        mod += 7;
+    }
+    int pitch = Minor(mod);
+    pitch += octave * 12;
+    pitch += accidental;
+    pitch += 57;
+    return AbsoluteNote(pitch);
+}
+
+float32 AMinor(int note)
+{
+    return AMinor(note, 0);
+}
+
 void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
 {
     AUDIO_CLOCK *clock = &(state->clock);
     AUDIO_CURSOR cursor = {};
 
     float32 samples_per_minute = (float32)(audio->samples_per_tick * 1000 * 60);
-    clock->samples_per_beat = samples_per_minute / clock->bpm;
-    float64 elapsed = (ticks * audio->samples_per_tick) / clock->samples_per_beat;
+    float32 samples_per_beat = samples_per_minute / clock->bpm;
+    float64 elapsed = (ticks * audio->samples_per_tick) / samples_per_beat;
     clock->time = clock->time.Plus(elapsed);
     audio->written -= elapsed;
+    audio->written = max(audio->written, 0);
 
     cursor.start = clock->time.Plus(audio->written);
     cursor.end = audio->size;
-    cursor.samples_per_beat = clock->samples_per_beat;
+    cursor.samples_per_beat = samples_per_beat;
     cursor.samples_per_tick = audio->samples_per_tick;
     cursor.stream = (float32*)audio->stream;
 
     while(cursor.written < cursor.end)
     {
-        Play(1.0, &cursor, 220.f, 0.5f, &(state->instrument));
-        Play(1.0, &cursor, 440.f, 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.0f, &(state->instrument));
+
+        Play(0.5, &cursor, AMinor(0), 0.0f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(7), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(6), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
+
+        Play(1.5, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.0f, &(state->instrument));
+
     }
-    audio->written += audio->size / clock->samples_per_beat;
+    audio->written += audio->size / samples_per_beat;
 }
 
 void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int block_x, int block_y)
@@ -422,7 +518,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         state->block_y = 19;
                         state->block_x = 5;
                         state->block_landing = GetBlockLanding(state->board, state->block_x, state->block_y);
-                        state->clock.bpm += 1;
                     }
                 }
             }
@@ -445,6 +540,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         while (beats--)
         {
+            state->clock.bpm += 1;
             if (state->is_moving)
             {
                 state->is_moving = false;
