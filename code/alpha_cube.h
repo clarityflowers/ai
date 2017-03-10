@@ -94,7 +94,7 @@ struct GAME_AUDIO
 {
     void *stream;
     uint32 size, depth, samples_per_tick;
-    uint64 written;
+    float64 written;
 };
 
 #define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
@@ -108,17 +108,67 @@ struct RGBA_COLOR
     uint8 r,g,b,a;
 };
 
+struct AUDIO_TIME
+{
+    int beats;
+    float64 time;
+    AUDIO_TIME Plus(AUDIO_TIME other)
+    {
+        AUDIO_TIME result = *this;
+        result.beats += other.beats;
+        result.time += other.time;
+        while (result.time >= 1.0)
+        {
+            result.beats++;
+            result.time -= 1.0;
+        }
+        return result;
+    }
+    AUDIO_TIME Plus(float64 beatsToAdd)
+    {
+        AUDIO_TIME result = *this;
+        result.time += beatsToAdd;
+        while (result.time >= 1.0)
+        {
+            result.beats++;
+            result.time -= 1.0;
+        }
+        return result;
+    }
+    AUDIO_TIME Minus(AUDIO_TIME other)
+    {
+        AUDIO_TIME result = *this;
+        result.beats -= other.beats;
+        result.time -= other.time;
+        while (result.time < 0) {
+            result.beats--;
+            result.time += 1.0;
+        }
+        return result;
+    }
+    bool32 LessThan(AUDIO_TIME other)
+    {
+        if (beats < other.beats)
+        {
+            return true;
+        }
+        if (beats == other.beats && time < other.time) {
+            return true;
+        }
+        return false;
+    }
+    float64 Time()
+    {
+        return beats + time;
+    }
+};
+
 struct AUDIO_CLOCK
 {
-    uint64 samples;
+    AUDIO_TIME time;
     float32 bpm;
     float32 samples_per_beat;
     int meter;
-    int beat() {
-    }
-    int measure() {
-        return (int)((samples / samples_per_beat) / meter);
-    }
 };
 
 struct SIN_STATE

@@ -241,71 +241,71 @@ void Instrument(GAME_AUDIO* audio, float32* stream, uint64 length, float frequen
 // }
 
 
-int Beat(AUDIO_CLOCK clock)
-{
-    if (clock.samples_per_beat == 0)
-    {
-        return 0;
-    }
-    else
-    {
-        return (int)(clock.samples / clock.samples_per_beat);
-    }
-}
+// int Beat(AUDIO_CLOCK clock)
+// {
+//     if (clock.samples_per_beat == 0)
+//     {
+//         return 0;
+//     }
+//     else
+//     {
+//         return (int)(clock.samples / clock.samples_per_beat);
+//     }
+// }
 
-uint64 Samples(AUDIO_CLOCK clock, float32 beats)
-{
-    return (uint64)(beats * clock.samples_per_beat);
-}
+// uint64 Samples(AUDIO_CLOCK clock, float32 beats)
+// {
+//     return (uint64)(beats * clock.samples_per_beat);
+// }
+//
+// uint64 Samples(AUDIO_CLOCK clock, int measures, float32 beats)
+// {
+//     return Samples(clock, measures * clock.meter + beats);
+// }
 
-uint64 Samples(AUDIO_CLOCK clock, int measures, float32 beats)
-{
-    return Samples(clock, measures * clock.meter + beats);
-}
-
+// TODO: Audio clock needs to be measured in beats, not samples, because we need
+// to be able to change bpm.
 void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
 {
     float32 *stream;
     AUDIO_CLOCK *clock = &(state->clock);
-    AUDIO_CLOCK cursor;
 
     float32 samples_per_minute = (float32)(audio->samples_per_tick * 1000 * 60);
     clock->samples_per_beat = samples_per_minute / clock->bpm;
-    clock->samples += ticks * audio->samples_per_tick;
+    float64 elapsed = (ticks * audio->samples_per_tick) / clock->samples_per_beat;
+    clock->time = clock->time.Plus(elapsed);
+    audio->written -= elapsed;
 
-    cursor = *clock;
+    AUDIO_TIME cursor = clock->time.Plus(audio->written);
 
-    if (audio->written > ticks * audio->samples_per_tick)
-    {
-        audio->written -= ticks * audio->samples_per_tick;
-        cursor.samples += audio->written;
-    }
     {
         char text[256];
         snprintf(text, sizeof(text), "%d ticks elapsed\n", ticks);
         OutputDebugStringA(text);
     }
-    uint64 start = cursor.samples;
-    uint64 end = cursor.samples + audio->size;
+
+    uint64 written = 0;
+    uint64 end = audio->size;
     stream = (float32*)audio->stream;
-    uint64 m = 0;
-    while(cursor.samples < end)
+    AUDIO_TIME m = {};
+    while(written < end)
     {
-        m += Samples(cursor, 1.0f);
-        // samples, start, end, m, audio, &stream[i], pitch, amplitude, state
-        if (cursor.samples < end && cursor.samples < m) {
-            uint64 length = min(m - cursor.samples, end - cursor.samples);
-            Instrument(audio, &stream[cursor.samples - start], length, 220.0f, 0.5f, &(state->instrument));
-            cursor.samples += length;
+        m = m.Plus(1.0);
+        if (written < end && cursor.LessThan(m)) {
+            uint64 length = (uint64)min(m.Minus(cursor).Time() * clock->samples_per_beat, end - written);
+            Instrument(audio, &stream[written], length, 220.0f, 0.5f, &(state->instrument));
+            cursor = m;
+            written += length;
         }
-        m += Samples(cursor, 1.0f);
-        if (cursor.samples < end && cursor.samples < m) {
-            uint64 length = min(m - cursor.samples, end - cursor.samples);
-            Instrument(audio, &stream[cursor.samples - start], length, 440.0f, 0.5f, &(state->instrument));
-            cursor.samples += length;
+        m = m.Plus(1.0);
+        if (written < end && cursor.LessThan(m)) {
+            uint64 length = (uint64)min(m.Minus(cursor).Time() * clock->samples_per_beat, end - written);
+            Instrument(audio, &stream[written], length, 440.0f, 0.5f, &(state->instrument));
+            cursor = m;
+            written += length;
         }
     }
-    audio->written += audio->size;
+    audio->written += audio->size / clock->samples_per_beat;
 }
 
 void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int block_x, int block_y)
@@ -379,7 +379,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         InitColors(state);
     }
 
-    int new_beats = beat(state->clock);
+    int new_beats = state->clock.time.beats;
     int beats = max(new_beats - state->beats, 0);
     state->beats = new_beats;
 
