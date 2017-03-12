@@ -209,7 +209,7 @@ struct INSTRUMENT
     void* memory;
     void (*Play)(
         float32* stream, uint64 length,
-        uint32 samples_per_tick, float frequency, float amplitude,
+        uint32 samples_per_tick, float frequency, float attack,
         void* memory
     );
 };
