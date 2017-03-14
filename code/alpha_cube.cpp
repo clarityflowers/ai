@@ -187,36 +187,84 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y)
 void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, int x, int y, int landing)
 {
     DrawTile(buffer, x, y);
-    DrawRect(buffer, BOARD_X + (8*x), BOARD_Y + (8*landing), 8, 8, 0);
+    if (landing != y)
+    {
+        DrawRect(buffer, BOARD_X + (8*x), BOARD_Y + (8*landing), 8, 8, 0);
+    }
 }
 
 //******************************************************************************
 //**************************** MAIN ********************************************
 //******************************************************************************
 
-void SinWave(float32* stream, uint64 length, uint32 samples_per_tick, float frequency, float attack, void* memory)
+
+float32 GetStep(uint32 samples_per_tick, float frequency)
 {
-    SIN_STATE* state = (SIN_STATE*) memory;
-    float32 step;
+    float32 step = 0;
     if (frequency > 0)
     {
         uint32 samples_per_second = samples_per_tick * 1000;
         float32 period = samples_per_second / frequency;
-        float32 sample_frequency = frequency / samples_per_second;
-        step = sample_frequency * Tau32;
+        step = frequency / samples_per_second;
     }
-    else
-    {
-        step = 0;
-    }
+    return step;
+}
+
+void SinWave(float32* stream, uint64 length, uint32 samples_per_tick, float frequency, float attack, void* memory)
+{
+    SIN_STATE* state = (SIN_STATE*) memory;
+    float32 step = GetStep(samples_per_tick, frequency);
     for (uint32 i=0; i<length; i++)
     {
-        *stream += ((float32)sin(state->x) * 0.5f);
+        *stream += ((float32)sin(state->x * Tau32) * 0.5f);
         stream++;
         state->x += step;
-        while (state->x > Tau32)
+        while (state->x > 1.0f)
         {
-            state->x -= Tau32;
+            state->x -= 1.0f;
+        }
+    }
+}
+
+
+void Triangle(float32* stream, uint64 length, uint32 samples_per_tick, float frequency, float attack, void* memory)
+{
+    TRIANGLE_STATE* state = (TRIANGLE_STATE*) memory;
+    float32 period = GetStep(samples_per_tick, frequency);
+    for (uint32 i=0; i<length; i++)
+    {
+        float32 result;
+        {
+            float32 x = state->x;
+            float32 phase = x * 2.0f;
+            if (x >= 0.5f)
+            {
+                phase -= 1.0f;
+            }
+            result = 0;
+            float32 step = (float32)floor(phase * 15);
+            float32 step_phase = (phase * 15) - step;
+            step_phase = (float32)asin(pow(step_phase * 2.0f - 1.0f, 3)) / Tau32;
+            step += step_phase;
+            if (step > 15) {
+                step = 30 - step;
+            }
+            step = max(step, 0.0f);
+            result = (float32)(pow(floor(phase * 15) / 15.0f, 0.75f) * 2.0f) - 1.0f;
+            // result = (float32)(pow(step / 15.0f, .8) * 2.0f) - 1.0f;
+            // result = (float32)((step / 15.0f) * 2.0f) - 1.0f;
+            // result = (float32)((floor(phase * 15) / 15.0f) * 2.0f) - 1.0f;
+            if (x < 0.5f)
+            {
+                result *= -1;
+            }
+        }
+        *stream += ((float32)(result) * 0.15f);
+        stream++;
+        state->x += period;
+        while (state->x > 1.0)
+        {
+            state->x -= 1.0;
         }
     }
 }
@@ -224,12 +272,12 @@ void SinWave(float32* stream, uint64 length, uint32 samples_per_tick, float freq
 void Instrument(float32* stream, uint64 length, uint32 samples_per_tick, float frequency, float attack, void* memory)
 {
     INSTRUMENT_STATE* state = (INSTRUMENT_STATE*) memory;
-    SinWave(stream, length, samples_per_tick, frequency * 2.0f, attack * 0.1f, &(state->sins[0]));
-    SinWave(stream, length, samples_per_tick, frequency, attack * 0.5f, &(state->sins[1]));
+    Triangle(stream, length, samples_per_tick, frequency * 2.0f, attack * 0.1f, &(state->triangle));
 }
 
 void Play(float64 time, AUDIO_CURSOR* cursor, float frequency, float attack, INSTRUMENT* instrument)
 {
+    instrument->Play = Instrument;
     if (cursor->written >= cursor->end)
     {
         return;
@@ -285,7 +333,7 @@ float32 AMinor(int note, int accidental)
     int pitch = Minor(mod);
     pitch += octave * 12;
     pitch += accidental;
-    pitch += 57;
+    pitch += 45;
     return AbsoluteNote(pitch);
 }
 
@@ -314,55 +362,55 @@ void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
 
     while(cursor.written < cursor.end)
     {
-        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-
-        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-
-        Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-
-        Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
-
-        Play(0.5, &cursor,     0,     0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(7), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(6), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
-
-        Play(1.5, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-
-        Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-
-        Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
-
+        Play(1.0f, &cursor, 117.2f, 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        //
+        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        //
+        // Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        //
+        // Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
+        //
+        // Play(0.5, &cursor,     0,     0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(7), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(6), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
+        //
+        // Play(1.5, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        //
+        // Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        //
+        // Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        // Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
     }
     audio->written += audio->size / samples_per_beat;
 }
@@ -406,6 +454,7 @@ GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
     {
         memset(audio->stream, 0, audio->size * audio->depth);
         GetSound(audio, state, ticks);
+        memcpy(state->audio_buffer,audio->stream, 1024 * 4);
     }
 }
 
@@ -415,7 +464,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     PIXEL_BACKBUFFER *buffer;
     void* pixels;
     uint64 timer;
-    int palette = 1;
+    int palette = 0;
 
     timer = StartProfiler();
     Assert(sizeof(GAME_STATE) <= memory->permanent_storage_size);
@@ -446,23 +495,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     pixels = buffer->pixels;
 
-    // DRAW BACKGROUND
-    DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 3);
-    DrawRect(buffer, BOARD_X - 1, BOARD_Y - 1, BOARD_WIDTH * 8 + 2, BOARD_HEIGHT * 8 + 2, 2);
-    DrawRect(buffer, BOARD_X, BOARD_Y, BOARD_WIDTH * 8, BOARD_HEIGHT * 8, 1);
 
-    {
-        for (int row=0; row < BOARD_HEIGHT; row++)
-        {
-            for (int col=0; col < BOARD_WIDTH; col++)
-            {
-                if (state->board[row][col])
-                {
-                    DrawTile(buffer, col, row);
-                }
-            }
-        }
-    }
 
     // RESOLVE INPUT
     {
@@ -569,9 +602,27 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
 
-    DrawCurrentBlock(buffer, state->block_x, state->block_y, state->block_landing);
-
-
+    // DRAW BACKGROUND
+    DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 3);
+    // DrawRect(buffer, BOARD_X - 1, BOARD_Y - 1, BOARD_WIDTH * 8 + 2, BOARD_HEIGHT * 8 + 2, 2);
+    // DrawRect(buffer, BOARD_X, BOARD_Y, BOARD_WIDTH * 8, BOARD_HEIGHT * 8, 1);
+    // DrawCurrentBlock(buffer, state->block_x, state->block_y, state->block_landing);
+    // {
+    //     for (int row=0; row < BOARD_HEIGHT; row++)
+    //     {
+    //         for (int col=0; col < BOARD_WIDTH; col++)
+    //         {
+    //             if (state->board[row][col])
+    //             {
+    //                 DrawTile(buffer, col, row);
+    //             }
+    //         }
+    //     }
+    // }
+    for (int i=0; i<256; i++)
+    {
+        DrawRect(buffer, i, 0, 1, (int)((((state->audio_buffer[i] * 5.0f) + 1.0f) * 0.5f) * 256), 0);
+    }
     // DRAW ONTO BACKBUFFER
     {
         uint8* pixel_row;

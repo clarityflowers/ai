@@ -199,9 +199,14 @@ struct SIN_STATE
     float32 x;
 };
 
+struct TRIANGLE_STATE
+{
+    float32 x;
+};
+
 struct INSTRUMENT_STATE
 {
-    SIN_STATE sins[2];
+    TRIANGLE_STATE triangle;
 };
 
 struct INSTRUMENT
@@ -228,6 +233,7 @@ struct GAME_STATE
     INSTRUMENT instrument;
     AUDIO_CLOCK clock;
     int beats;
+    float32 audio_buffer[1024];
 };
 
 #define ALPHA_CUBE_H
