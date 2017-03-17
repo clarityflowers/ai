@@ -244,19 +244,27 @@ void Triangle(float32* stream, uint64 length, uint32 samples_per_tick, float fre
             result = 0;
             float32 step = (float32)floor(phase * 15);
             float32 step_phase = (phase * 15) - step;
-            step_phase = (float32)asin(pow(step_phase * 2.0f - 1.0f, 3)) / Tau32;
+            // step_phase = (float32)(pow(step_phase * 2.0f - 1.0f, 3) + 1.0f) / 2.0f;
+            // step_phase = (float32)sin(step_phase * Tau32) * 0.1f;
+            step_phase = (float32)asin(pow(step_phase * 2.0f - 1.0f, 1)) / Tau32;
             step += step_phase;
             if (step > 15) {
                 step = 30 - step;
             }
             step = max(step, 0.0f);
-            result = (float32)(pow(floor(phase * 15) / 15.0f, 0.75f) * 2.0f) - 1.0f;
-            // result = (float32)(pow(step / 15.0f, .8) * 2.0f) - 1.0f;
+            // result = (float32)(pow(floor(phase * 15.0f) / 15.0f, 0.75f) * 2.0f) - 1.0f;
+            // result = (float32)(pow(step / 15.0f, .9) * 2.0f) - 1.0f;
             // result = (float32)((step / 15.0f) * 2.0f) - 1.0f;
+            result = ((float32)pow(phase, 0.8) * 2.0f) - 1.0f;
             // result = (float32)((floor(phase * 15) / 15.0f) * 2.0f) - 1.0f;
             if (x < 0.5f)
             {
-                result *= -1;
+                result = (result *-1);
+                // result = result - ((float32)sin(step_phase * Tau32 / 2.0f) * 0.1f);
+            }
+            else
+            {
+
             }
         }
         *stream += ((float32)(result) * 0.15f);
@@ -362,7 +370,9 @@ void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
 
     while(cursor.written < cursor.end)
     {
-        Play(1.0f, &cursor, 117.2f, 0.5f, &(state->instrument));
+        Play(1.0f, &cursor, 0, 0.5f, &(state->instrument));
+        // Play(1.0f, &cursor, 117.188f, 0.5f, &(state->instrument));
+        // Play(1.0f, &cursor, AMinor(0, 1), 0.5f, &(state->instrument));
         // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
         // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
         // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
@@ -604,25 +614,25 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // DRAW BACKGROUND
     DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 3);
-    // DrawRect(buffer, BOARD_X - 1, BOARD_Y - 1, BOARD_WIDTH * 8 + 2, BOARD_HEIGHT * 8 + 2, 2);
-    // DrawRect(buffer, BOARD_X, BOARD_Y, BOARD_WIDTH * 8, BOARD_HEIGHT * 8, 1);
-    // DrawCurrentBlock(buffer, state->block_x, state->block_y, state->block_landing);
-    // {
-    //     for (int row=0; row < BOARD_HEIGHT; row++)
-    //     {
-    //         for (int col=0; col < BOARD_WIDTH; col++)
-    //         {
-    //             if (state->board[row][col])
-    //             {
-    //                 DrawTile(buffer, col, row);
-    //             }
-    //         }
-    //     }
-    // }
-    for (int i=0; i<256; i++)
+    DrawRect(buffer, BOARD_X - 1, BOARD_Y - 1, BOARD_WIDTH * 8 + 2, BOARD_HEIGHT * 8 + 2, 2);
+    DrawRect(buffer, BOARD_X, BOARD_Y, BOARD_WIDTH * 8, BOARD_HEIGHT * 8, 1);
+    DrawCurrentBlock(buffer, state->block_x, state->block_y, state->block_landing);
     {
-        DrawRect(buffer, i, 0, 1, (int)((((state->audio_buffer[i] * 5.0f) + 1.0f) * 0.5f) * 256), 0);
+        for (int row=0; row < BOARD_HEIGHT; row++)
+        {
+            for (int col=0; col < BOARD_WIDTH; col++)
+            {
+                if (state->board[row][col])
+                {
+                    DrawTile(buffer, col, row);
+                }
+            }
+        }
     }
+    // for (int i=0; i<256; i++)
+    // {
+    //     DrawRect(buffer, i, 0, 1, (int)((((state->audio_buffer[i] * 5.0f) + 1.0f) * 0.5f) * 256), 0);
+    // }
     // DRAW ONTO BACKBUFFER
     {
         uint8* pixel_row;
