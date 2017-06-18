@@ -252,6 +252,7 @@ WinMain(
 		// TODO (Cerisa): Logging
 	}
 
+    // Init audio
     IXAudio2SourceVoice* source_voice = NULL;
     {
         IXAudio2* xaudio2 = NULL;
@@ -443,6 +444,8 @@ WinMain(
         // }
 
 		game_is_running = game_is_running && game.UpdateAndRender(&game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
+
+        // Audio
         {
             XAUDIO2_VOICE_STATE voice_state;
             source_voice->GetState(&voice_state);
@@ -470,36 +473,42 @@ WinMain(
         }
 
         uint32 delta_time;
-        if (render_thread != NULL)
-        {
-            uint32 current_frame_time, time_to_wait;
 
-            time_to_wait = 0;
-            SDL_WaitThread(render_thread, &thread_return_value);
-            current_frame_time = SDL_GetTicks();
-            delta_time = current_frame_time - render_buffer.last_frame_time;
-            // {
-            //     char text[256];
-            //     snprintf(text, sizeof(text), "current_frame_time: %d\n   last_frame_time: %d\n        delta_time: %d\n", current_frame_time, render_buffer.last_frame_time, delta_time);
-            //     OutputDebugStringA(text);
-            // }
-            if (delta_time < SCREEN_TICKS_PER_FRAME)
+        // Video
+        {
+            if (render_thread != NULL)
             {
-                time_to_wait = SCREEN_TICKS_PER_FRAME - delta_time;
-                SDL_Delay(time_to_wait);
+                uint32 current_frame_time, time_to_wait;
+
+                time_to_wait = 0;
+                SDL_WaitThread(render_thread, &thread_return_value);
                 current_frame_time = SDL_GetTicks();
                 delta_time = current_frame_time - render_buffer.last_frame_time;
+                // {
+                //     char text[256];
+                //     snprintf(text, sizeof(text), "current_frame_time: %d\n   last_frame_time: %d\n        delta_time: %d\n", current_frame_time, render_buffer.last_frame_time, delta_time);
+                //     OutputDebugStringA(text);
+                // }
+                if (delta_time < SCREEN_TICKS_PER_FRAME)
+                {
+                    time_to_wait = SCREEN_TICKS_PER_FRAME - delta_time;
+                    SDL_Delay(time_to_wait);
+                    current_frame_time = SDL_GetTicks();
+                    delta_time = current_frame_time - render_buffer.last_frame_time;
+                }
+                {
+                    // char text[256];
+                    // snprintf(text, sizeof(text), "       time_waited: %d\n",time_to_wait);
+                    // OutputDebugStringA(text);
+                }
+                SDL_RenderPresent(render_buffer.renderer);
+                render_buffer.last_frame_time = SDL_GetTicks();
             }
-            {
-                // char text[256];
-                // snprintf(text, sizeof(text), "       time_waited: %d\n",time_to_wait);
-                // OutputDebugStringA(text);
-            }
-            SDL_RenderPresent(render_buffer.renderer);
-            render_buffer.last_frame_time = SDL_GetTicks();
+            memcpy(render_buffer.pixels, buffer.pixels, buffer_memory_size);
+            render_thread = SDL_CreateThread(Win_Render, "Render", (void*) (&render_buffer));
         }
-        memcpy(render_buffer.pixels, buffer.pixels, buffer_memory_size);
-        render_thread = SDL_CreateThread(Win_Render, "Render", (void*) (&render_buffer));
+
+        // Giffer
         if (frames % GIFFER_FRAME_RATE == 0)
         {
             if (giffer_thread != NULL)
@@ -525,6 +534,7 @@ WinMain(
                 giffer_thread = NULL;
             }
         }
+
         frames++;
 		{
 			GAME_INPUT* tmp = old_input;
@@ -542,5 +552,9 @@ WinMain(
 	VirtualFree(game_memory.permanent_storage, 0, MEM_RELEASE);
 	VirtualFree(game_memory.transient_storage, 0, MEM_RELEASE);
 	VirtualFree(buffer.pixels, 0, MEM_RELEASE);
+    for (int i=0; i < AUDIO_BUFFERS; i++)
+    {
+        VirtualFree(audio_output_buffers[i], 0, MEM_RELEASE);
+    }
 	return 0;
 }
