@@ -252,28 +252,34 @@ WinMain(
 		// TODO (Cerisa): Logging
 	}
 
-    SDL_AudioSpec audiospec_want;
-    SDL_AudioSpec audiospec_have;
     SDL_AudioDeviceID audio;
-    memset(&audiospec_want, 0, sizeof(SDL_AudioSpec));
-    audiospec_want.samples = 1024;
-    audiospec_want.freq = 48000;
-    audiospec_want.format = AUDIO_F32SYS;
-    audiospec_want.channels = 1;
-    audio = SDL_OpenAudioDevice(NULL, 0, &audiospec_want, &audiospec_have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
-    if (audio == 0)
     {
-		char error[256];
-	    snprintf(error, sizeof(error), "Audio failed: %s\n", SDL_GetError());
-		OutputDebugStringA(error);
-		exit(1);
+        game_audio.size = 1024;
+        game_audio.depth = 4;
+        game_audio.samples_per_tick = 48;
+
+        SDL_AudioSpec audiospec_want;
+        SDL_AudioSpec audiospec_have;
+        memset(&audiospec_want, 0, sizeof(SDL_AudioSpec));
+        audiospec_want.samples = game_audio.size;
+        audiospec_want.freq = 48000;
+        audiospec_want.format = AUDIO_F32SYS;
+        audiospec_want.channels = 1;
+        audio = SDL_OpenAudioDevice(NULL, 0, &audiospec_want, &audiospec_have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+        if (audio == 0)
+        {
+            char error[256];
+            snprintf(error, sizeof(error), "Audio failed: %s\n", SDL_GetError());
+            OutputDebugStringA(error);
+            exit(1);
+        }
+        if (audiospec_have.format != audiospec_want.format) {
+            char error[256];
+            snprintf(error, sizeof(error), "Didn't get desired format");
+            OutputDebugStringA(error);
+        }
+        SDL_PauseAudioDevice(audio, 0);
     }
-    if (audiospec_have.format != audiospec_want.format) {
-    	char error[256];
-        snprintf(error, sizeof(error), "Didn't get desired format");
-    	OutputDebugStringA(error);
-    }
-    SDL_PauseAudioDevice(audio, 0);
 
 	renderer = SDL_CreateRenderer(window, -1, 0);
 	if (renderer == 0)
@@ -298,10 +304,6 @@ WinMain(
 	buffer.depth = 4;
 	buffer.pitch = buffer.depth * buffer.w;
     render_buffer.pitch = buffer.pitch;
-	// SDL_LockTexture(texture, 0, &(buffer.pixels), &(buffer.pitch));
-    game_audio.size = 1024;
-    game_audio.depth = 4;
-    game_audio.samples_per_tick = 48;
 
 #if ALPHA_CUBE_INTERNAL
 	base_address = 0;
@@ -441,21 +443,24 @@ WinMain(
 
 		game_is_running = game_is_running && game.UpdateAndRender(&game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
 
-        uint32 queued_audio = SDL_GetQueuedAudioSize(audio);
         {
-            char out_buffer[256];
-            snprintf(out_buffer, sizeof(out_buffer), "queud audio: %d\n", queued_audio);
-            OutputDebugStringA(out_buffer);
+            uint32 queued_audio = SDL_GetQueuedAudioSize(audio);
+            {
+                char out_buffer[256];
+                snprintf(out_buffer, sizeof(out_buffer), "queud audio: %d\n", queued_audio);
+                OutputDebugStringA(out_buffer);
+            }
+            while (queued_audio <= 1024 * 4 * 2)
+            {
+                uint32 current_sound_time = SDL_GetTicks();
+                uint32 sound_time_elapsed = current_sound_time - last_sound_time;
+                game.GetSoundSamples(&game_memory, &game_audio, sound_time_elapsed);
+                SDL_QueueAudio(audio, game_audio.stream, game_audio.size * game_audio.depth);
+                queued_audio = SDL_GetQueuedAudioSize(audio);
+                last_sound_time = current_sound_time;
+            }
         }
-        while (queued_audio <= 1024 * 4 * 2)
-        {
-            uint32 current_sound_time = SDL_GetTicks();
-            uint32 sound_time_elapsed = current_sound_time - last_sound_time;
-            game.GetSoundSamples(&game_memory, &game_audio, sound_time_elapsed);
-            SDL_QueueAudio(audio, game_audio.stream, game_audio.size * game_audio.depth);
-            queued_audio = SDL_GetQueuedAudioSize(audio);
-            last_sound_time = current_sound_time;
-        }
+        
         uint32 delta_time;
         if (render_thread != NULL)
         {
