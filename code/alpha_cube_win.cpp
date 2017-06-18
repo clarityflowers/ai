@@ -1,6 +1,7 @@
 #include "alpha_cube.h"
 
 #include <SDL.h>
+#include <Xaudio2.h>
 #include "giffer.h"
 #include <windows.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #define SCREEN_FPS 30
 #define GIFFER_FRAME_RATE 1
 #define SCREEN_TICKS_PER_FRAME 33
+#define AUDIO_BUFFERS 3
 
 
 //******************************************************************************
@@ -252,33 +254,28 @@ WinMain(
 		// TODO (Cerisa): Logging
 	}
 
-    SDL_AudioDeviceID audio;
+    IXAudio2SourceVoice* source_voice = NULL;
     {
+        IXAudio2* xaudio2 = NULL;
+        IXAudio2MasteringVoice* master_voice = NULL;
         game_audio.size = 1024;
         game_audio.depth = 4;
         game_audio.samples_per_tick = 48;
 
-        SDL_AudioSpec audiospec_want;
-        SDL_AudioSpec audiospec_have;
-        memset(&audiospec_want, 0, sizeof(SDL_AudioSpec));
-        audiospec_want.samples = (uint16)game_audio.size;
-        audiospec_want.freq = 48000;
-        audiospec_want.format = AUDIO_F32SYS;
-        audiospec_want.channels = 1;
-        audio = SDL_OpenAudioDevice(NULL, 0, &audiospec_want, &audiospec_have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
-        if (audio == 0)
-        {
-            char error[256];
-            snprintf(error, sizeof(error), "Audio failed: %s\n", SDL_GetError());
-            OutputDebugStringA(error);
-            exit(1);
-        }
-        if (audiospec_have.format != audiospec_want.format) {
-            char error[256];
-            snprintf(error, sizeof(error), "Didn't get desired format");
-            OutputDebugStringA(error);
-        }
-        SDL_PauseAudioDevice(audio, 0);
+        WAVEFORMATEX wfx = {};
+        wfx.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
+        wfx.nChannels = 1;
+        wfx.nSamplesPerSec = 48000;
+        wfx.wBitsPerSample = 32;
+        wfx.nBlockAlign = (wfx.nChannels * wfx.wBitsPerSample) / 8;
+        wfx.nAvgBytesPerSec = (wfx.nChannels * wfx.nSamplesPerSec * wfx.wBitsPerSample) / 8;
+        wfx.cbSize = 0;
+
+        if (FAILED(XAudio2Create(&xaudio2, 0, XAUDIO2_DEFAULT_PROCESSOR))) return 1;
+        if (FAILED(xaudio2->CreateMasteringVoice(&master_voice))) return 1;
+        if (FAILED(xaudio2->CreateSourceVoice(&source_voice, (WAVEFORMATEX*)&wfx))) return 1;
+
+        source_voice->Start(0, 0);
     }
 
 	renderer = SDL_CreateRenderer(window, -1, 0);
@@ -328,6 +325,11 @@ WinMain(
 
     int game_audio_buffer_size = (game_audio.size * game_audio.depth);
     game_audio.stream = VirtualAlloc(0, game_audio_buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    void* audio_output_buffers[AUDIO_BUFFERS];
+    for (int i=0; i < AUDIO_BUFFERS; i++)
+    {
+        audio_output_buffers[i] =  (void*) VirtualAlloc(0, game_audio_buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    }
 
 	game_is_running = true;
 	render_buffer.last_frame_time = SDL_GetTicks();
@@ -337,6 +339,7 @@ WinMain(
     int fps_tracker_index = 0;
     int frames = 0;
     uint32 last_sound_time = SDL_GetTicks();
+    int current_audio_buffer = 0;
 	while (game_is_running)
 	{
 
@@ -442,22 +445,29 @@ WinMain(
         // }
 
 		game_is_running = game_is_running && game.UpdateAndRender(&game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
-
         {
-            uint32 queued_audio = SDL_GetQueuedAudioSize(audio);
-            {
-                char out_buffer[256];
-                snprintf(out_buffer, sizeof(out_buffer), "queud audio: %d\n", queued_audio);
-                OutputDebugStringA(out_buffer);
-            }
-            while (queued_audio <= 1024 * 4 * 2)
+            XAUDIO2_VOICE_STATE voice_state;
+            source_voice->GetState(&voice_state);
+            uint32 queued_audio = voice_state.BuffersQueued;
+            while (queued_audio < AUDIO_BUFFERS)
             {
                 uint32 current_sound_time = SDL_GetTicks();
                 uint32 sound_time_elapsed = current_sound_time - last_sound_time;
                 game.GetSoundSamples(&game_memory, &game_audio, sound_time_elapsed);
-                SDL_QueueAudio(audio, game_audio.stream, game_audio.size * game_audio.depth);
-                queued_audio = SDL_GetQueuedAudioSize(audio);
+
+
+                memcpy(audio_output_buffers[current_audio_buffer], game_audio.stream, game_audio.size * game_audio.depth);
+
+                XAUDIO2_BUFFER buffer = {0};
+                buffer.AudioBytes = game_audio.size * game_audio.depth;
+                buffer.pAudioData = (byte*)audio_output_buffers[current_audio_buffer];
+                HRESULT hr = source_voice->SubmitSourceBuffer(&buffer);
+
+                source_voice->GetState(&voice_state);
+                queued_audio = voice_state.BuffersQueued;
+
                 last_sound_time = current_sound_time;
+                current_audio_buffer = (current_audio_buffer + 1) % AUDIO_BUFFERS;
             }
         }
 
@@ -529,7 +539,7 @@ WinMain(
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
-    SDL_CloseAudioDevice(audio);
+    // SDL_CloseAudioDevice(audio);
 	SDL_Quit();
 	Win_UnloadGameCode(&game);
 	VirtualFree(game_memory.permanent_storage, 0, MEM_RELEASE);

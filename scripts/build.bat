@@ -4,7 +4,7 @@ set GifferPath=C:\projects\build\giffer
 
 REM set CommonCompilerFlags=-MTd -nologo -Gm- -GR- -EHa- -Ox -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -DALPHA_CUBE_INTERNAL=1 -DALPHA_CUBE_SLOW=1 -DALPHA_CUBE_WIN32=1 -FC -Z7
 set CommonCompilerFlags=-MTd -nologo -Gm- -GR- -EHa- -Od -Oi -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -DALPHA_CUBE_INTERNAL=1 -DALPHA_CUBE_SLOW=1 -DALPHA_CUBE_WIN32=1 -FC -Z7
-set CommonLinkerFlags= -incremental:no -opt:ref user32.lib gdi32.lib winmm.lib
+set CommonLinkerFlags= -incremental:no -opt:ref user32.lib gdi32.lib winmm.lib xaudio2.lib
 REM TODO: - can we just build both with one exe?
 
 IF NOT EXIST ..\..\build mkdir ..\..\build
