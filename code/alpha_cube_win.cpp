@@ -221,8 +221,6 @@ WinMain(
 	LPVOID base_address;
 	GAME_MEMORY game_memory = {};
 
-	// uint32 last_frame_time = 0;
-	// uint32 delta_time = 0;
 	int pitch = NULL;
 	PIXEL_BACKBUFFER buffer = {};
     GAME_AUDIO game_audio = {};
@@ -539,7 +537,6 @@ WinMain(
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
-    // SDL_CloseAudioDevice(audio);
 	SDL_Quit();
 	Win_UnloadGameCode(&game);
 	VirtualFree(game_memory.permanent_storage, 0, MEM_RELEASE);
