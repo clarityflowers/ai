@@ -261,7 +261,7 @@ WinMain(
         SDL_AudioSpec audiospec_want;
         SDL_AudioSpec audiospec_have;
         memset(&audiospec_want, 0, sizeof(SDL_AudioSpec));
-        audiospec_want.samples = game_audio.size;
+        audiospec_want.samples = (uint16)game_audio.size;
         audiospec_want.freq = 48000;
         audiospec_want.format = AUDIO_F32SYS;
         audiospec_want.channels = 1;
@@ -460,7 +460,7 @@ WinMain(
                 last_sound_time = current_sound_time;
             }
         }
-        
+
         uint32 delta_time;
         if (render_thread != NULL)
         {
