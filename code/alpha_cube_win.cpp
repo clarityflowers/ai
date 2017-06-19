@@ -1,4 +1,4 @@
-#include "alpha_cube.h"
+#include "platform.h"
 
 #include <SDL.h>
 #include <Xaudio2.h>

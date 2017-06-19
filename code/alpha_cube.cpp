@@ -1,10 +1,10 @@
 #include "alpha_cube.h"
 
-
 #include <windows.h>
 #include <stdio.h>
 #include <SDL.h>
 #include <math.h>
+
 
 #define GAME_HEIGHT 240
 #define GAME_WIDTH 256
@@ -385,10 +385,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
     }
-    // for (int i=0; i<256; i++)
-    // {
-    //     DrawRect(buffer, i, 0, 1, (int)((((state->audio_buffer[i] * 5.0f) + 1.0f) * 0.5f) * 256), 0);
-    // }
+    
     // DRAW ONTO BACKBUFFER
     {
         uint8* pixel_row;

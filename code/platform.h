@@ -2,6 +2,19 @@
 
 #include <stdint.h>
 
+#if ALPHA_CUBE_SLOW
+#define Assert(Expression) \
+    if(!(Expression)) {*(int *)0 = 0;}
+#else
+#define Assert(Expression)
+#endif
+
+#define Pi32  3.1415926539f
+#define Tau32 6.2831853071f
+#define internal static
+#define local_persist static
+#define global_variable static
+
 typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
@@ -17,10 +30,6 @@ typedef uint64_t uint64;
 typedef float float32;
 typedef double float64;
 
-#define internal static
-#define local_persist static
-#define global_variable static
-
 #define Kilobytes(Value) (Value*1024LL)
 #define Megabytes(Value) (Kilobytes(Value)*1024LL)
 #define Gigabytes(Value) (Megabytes(Value)*1024LL)
@@ -30,6 +39,26 @@ typedef double float64;
 
 #define BOARD_WIDTH 10
 #define BOARD_HEIGHT 20
+
+struct GAME_MEMORY
+{
+    bool32 is_initialized;
+
+    uint64 permanent_storage_size;
+    void* permanent_storage; // NOTE(casey): REQUIRED to be cleared to zero at startup
+    int permanent_storage_offset;
+
+    uint64 transient_storage_size;
+    void* transient_storage; // NOTE(casey): REQUIRED to be cleared to zero at startup
+    int transient_storage_offset;
+};
+
+struct GAME_AUDIO
+{
+    void *stream;
+    uint32 size, depth, samples_per_tick;
+    float64 written;
+};
 
 struct GAME_BUTTON_STATE
 {
@@ -66,27 +95,6 @@ struct PIXEL_BACKBUFFER
     void *pixels;
     int h, w, pitch, depth;
 };
-
-struct GAME_MEMORY
-{
-    bool32 is_initialized;
-
-    uint64 permanent_storage_size;
-    void* permanent_storage; // NOTE(casey): REQUIRED to be cleared to zero at startup
-    int permanent_storage_offset;
-
-    uint64 transient_storage_size;
-    void* transient_storage; // NOTE(casey): REQUIRED to be cleared to zero at startup
-    int transient_storage_offset;
-};
-
-struct GAME_AUDIO
-{
-    void *stream;
-    uint32 size, depth, samples_per_tick;
-    float64 written;
-};
-
 
 #define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
