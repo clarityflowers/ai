@@ -380,6 +380,14 @@ WinMain(
 						{
 							Win_LogKeyPress(&(new_keyboard->move_left), &event);
 						} break;
+						case SDLK_e:
+						{
+							Win_LogKeyPress(&(new_keyboard->rotate_clockwise), &event);
+						} break;
+						case SDLK_q:
+						{
+							Win_LogKeyPress(&(new_keyboard->rotate_counterclockwise), &event);
+						} break;
 						case SDLK_SPACE:
 						{
 							Win_LogKeyPress(&(new_keyboard->drop), &event);

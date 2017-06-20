@@ -36,10 +36,6 @@ typedef double float64;
 #define Terabytes(Value) (Gigabytes(Value)*1024LL)
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
-
-#define BOARD_WIDTH 10
-#define BOARD_HEIGHT 20
-
 struct GAME_MEMORY
 {
     bool32 is_initialized;
@@ -77,6 +73,8 @@ struct GAME_CONTROLLER_INPUT
         {
             GAME_BUTTON_STATE move_right;
             GAME_BUTTON_STATE move_left;
+            GAME_BUTTON_STATE rotate_clockwise;
+            GAME_BUTTON_STATE rotate_counterclockwise;
             GAME_BUTTON_STATE drop;
             GAME_BUTTON_STATE clear_board;
             GAME_BUTTON_STATE escape;
