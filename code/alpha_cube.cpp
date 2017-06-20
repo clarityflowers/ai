@@ -15,6 +15,7 @@
 #define BOARD_Y 40
 
 #include "sound.cpp"
+#include "random.h"
 
 //******************************************************************************
 //**************************** PROFILER ****************************************
@@ -98,40 +99,55 @@ int InitColors(GAME_STATE* state)
 //**************************** BLOCKS ******************************************
 //******************************************************************************
 
-int LTiles(int tiles[][2])
+int GetBaseTilesForKind(int tiles[][2], int kind)
 {
-    tiles[0][0] = 0;
-    tiles[0][1] = 0;
-    tiles[1][0] = 1;
-    tiles[1][1] = 0;
-    tiles[2][0] = 1;
-    tiles[2][1] = 1;
-    tiles[3][0] = -1;
-    tiles[3][1] = 0;
-    return 4;
+    if (kind == 0)
+    {
+        tiles[0][0] =  0; tiles[0][1] =  0;
+        tiles[1][0] =  1; tiles[1][1] =  0;
+        tiles[2][0] =  1; tiles[2][1] = -1;
+        tiles[3][0] = -1; tiles[3][1] =  0;
+        return 4;
+    }
+    if (kind == 1)
+    {
+        tiles[0][0] =  0; tiles[0][1] =  0;
+        tiles[1][0] =  1; tiles[1][1] =  0;
+        tiles[2][0] =  0; tiles[2][1] = -1;
+        tiles[3][0] = -1; tiles[3][1] =  0;
+        return 4;
+    }
+    if (kind == 2)
+    {
+        tiles[0][0] =  0; tiles[0][1] =  0;
+        return 1;
+    }
+    Assert(false);
+    return 0;
 }
 
-int GetBlockTiles(int tiles[][2], int rotate)
+int GetBlockTiles(int tiles[][2], int rotate, int kind)
 {
-    int l_tiles[4][2] = {{0,0}, {1,0}, {1,1}, {-1,0}};
+    int these_tiles[4][2];
+    int length = GetBaseTilesForKind(these_tiles, kind);
     for (int i=0; i < 4; i++)
     {
-        tiles[i][0] = (rotate % 2) ?  l_tiles[i][1] : l_tiles[i][0];
-        tiles[i][1] = (rotate % 2) ? -l_tiles[i][0] : l_tiles[i][1];
+        tiles[i][0] = (rotate % 2) ?  these_tiles[i][1] : these_tiles[i][0];
+        tiles[i][1] = (rotate % 2) ? -these_tiles[i][0] : these_tiles[i][1];
         if (rotate >= 2)
         {
             tiles[i][0] *= -1;
             tiles[i][1] *= -1;
         }
     }
-    return 4;
+    return length;
 }
 
 int GetBlockLanding(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
 {
     int col;
     int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate);
+    int length = GetBlockTiles(tiles, block.rotate, block.kind);
 
     for (col=block.y; col > 0; col--)
     {
@@ -148,11 +164,12 @@ int GetBlockLanding(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
     END: return col;
 }
 
-void ResetPosition(GAME_BLOCK* block)
+void ResetPosition(GAME_BLOCK* block, int kind)
 {
     block->y = 18;
     block->x = 16;
     block->rotate = 0;
+    block->kind = kind;
 }
 
 void PlaceTile(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int x, int y)
@@ -163,25 +180,25 @@ void PlaceTile(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int x, int y)
 void PlaceBlockOnBoard(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
 {
     int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate);
+    int length = GetBlockTiles(tiles, block.rotate, block.kind);
     for (int i=0; i < length; i++)
     {
         PlaceTile(board, block.x + tiles[i][0], block.y + tiles[i][1]);
     }
 }
 
-void DropBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block)
+void DropBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int kind)
 {
     GAME_BLOCK block_to_place = *block;
     block_to_place.y = GetBlockLanding(board, *block);
     PlaceBlockOnBoard(board, block_to_place);
-    ResetPosition(block);
+    ResetPosition(block, kind);
 }
 
-void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block)
+void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int kind)
 {
     PlaceBlockOnBoard(board, *block);
-    ResetPosition(block);
+    ResetPosition(block, kind);
 }
 
 
@@ -190,7 +207,7 @@ bool32 BlockIsValid(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
 {
     bool32 is_valid = true;
     int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate);
+    int length = GetBlockTiles(tiles, block.rotate, block.kind);
     for (int i=0; i < length; i++)
     {
         int x = block.x + tiles[i][0];
@@ -357,7 +374,7 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, int kind)
 void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, int kind)
 {
     int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate);
+    int length = GetBlockTiles(tiles, block.rotate, block.kind);
     for (int i=0; i < length; i++)
     {
         DrawTile(buffer, block.x + tiles[i][0], block.y + tiles[i][1], kind);
@@ -412,6 +429,18 @@ bool32 Keypress(GAME_BUTTON_STATE *button)
     return false;
 }
 
+int GetRandomKind(int *random_number_index)
+{
+    int index = *random_number_index;
+    int random = RANDOM_NUMBER_TABLE[index] % 6;
+    int result;
+    if (random == 0) result = 2;
+    else if (random <= 3) result = 1;
+    else result = 0;
+    *random_number_index += 1;
+    return result;
+}
+
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     GAME_STATE *state;
@@ -432,8 +461,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         buffer->pixels = AllocatePermanentStorage(memory,  (2 * GAME_WIDTH * GAME_HEIGHT) / 8);
         buffer->pitch = 2 * GAME_WIDTH / 8;
         memory->is_initialized = true;
-        state->block.x = 16;
-        state->block.y = 19;
+        ResetPosition(&state->block, GetRandomKind(&state->random_index));
         state->safety = 0;
         state->clock.bpm = 120.0f;
         state->clock.meter = 4;
@@ -512,8 +540,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (Keypress(&keyboard->drop))
         {
             int block_landing = GetBlockLanding(state->board, state->block);
-            DropBlock(state->board, &state->block);
-            ResetPosition(&state->block);
+            DropBlock(state->board, &state->block, GetRandomKind(&state->random_index));
         }
         if (Keypress(&keyboard->clear_board))
         {
@@ -536,7 +563,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
-                PlaceBlock(state->board, &state->block);
+                PlaceBlock(state->board, &state->block, GetRandomKind(&state->random_index));
             }
         }
     }

@@ -13,7 +13,7 @@ struct RGBA_COLOR
 
 struct GAME_BLOCK
 {
-    int x, y, rotate;
+    int x, y, rotate, kind;
 };
 
 struct GAME_STATE
@@ -29,6 +29,7 @@ struct GAME_STATE
     AUDIO_CLOCK clock;
     int beats;
     float32 audio_buffer[1024];
+    int random_index;
 };
 
 #define ALPHA_CUBE_H
