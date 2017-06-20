@@ -93,6 +93,7 @@ int InitColors(GAME_STATE* state)
 }
 
 
+
 //******************************************************************************
 //**************************** BLOCKS ******************************************
 //******************************************************************************
@@ -147,104 +148,6 @@ int GetBlockLanding(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
     END: return col;
 }
 
-//******************************************************************************
-//**************************** DRAW ********************************************
-//******************************************************************************
-
-void DrawPoint(PIXEL_BACKBUFFER* buffer, int x, int y, uint8 color)
-{
-    uint8* pixel_quad = (uint8*) buffer->pixels + ((x + (y*GAME_WIDTH)) / 4);
-    int position = (x + (y*GAME_WIDTH)) % 4;
-    uint8 mask = 3 << position;
-    *pixel_quad = (*pixel_quad & ~mask) | (color << (position * 2));
-}
-
-void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
-{
-    uint8* pixel_quad_row = (uint8*) buffer->pixels + ((x + (y*GAME_WIDTH)) / 4);
-    for (int row=0; row < h; row++)
-    {
-        if (y + row >= 0 && y + row < GAME_HEIGHT)
-        {
-            uint8* pixel_quad = pixel_quad_row;
-            int position ((x + ((y + row)*GAME_WIDTH)) % 4);
-            for (int col=0; col < w; col++)
-            {
-                if (x + col >= 0 && x + col < GAME_WIDTH)
-                {
-                    uint8 mask = 3 << (position * 2);
-                    *pixel_quad = (*pixel_quad & ~mask) | (color << (position * 2));
-                    position++;
-                    if (position == 4)
-                    {
-                        position = 0;
-                        *pixel_quad++;
-                    }
-                }
-            }
-        }
-        pixel_quad_row += buffer->pitch;
-    }
-}
-
-void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, int kind)
-{
-    int screen_x, screen_y;
-    if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
-    {
-        screen_x = x * 8;
-        screen_y = BOARD_Y + y * 8;
-    }
-    else
-    {
-        return;
-    }
-    if (kind ==0)
-    {
-        DrawRect(buffer, screen_x, screen_y, 8, 8, 0);
-    }
-    if (kind == 1)
-    {
-        DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 2);
-        DrawRect(buffer, screen_x, screen_y, 1, 7, 0);
-        DrawRect(buffer, screen_x, screen_y + 7, 7, 1, 0);
-        DrawRect(buffer, screen_x + 1, screen_y, 7, 1, 3);
-        DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 7, 3);
-    }
-}
-
-void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, int kind)
-{
-    int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate);
-    for (int i=0; i < length; i++)
-    {
-        DrawTile(buffer, block.x + tiles[i][0], block.y + tiles[i][1], kind);
-    }
-}
-
-void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block)
-{
-    DrawBlock(buffer, block, 1);
-}
-
-void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
-{
-    GAME_BLOCK landing_block = block;
-    int landing = GetBlockLanding(board, block);
-    if (landing != block.y)
-    {
-        landing_block.y = landing;
-        DrawBlock(buffer, landing_block, 0);
-    }
-}
-
-
-//******************************************************************************
-//**************************** MAIN ********************************************
-//******************************************************************************
-
-
 void ResetPosition(GAME_BLOCK* block)
 {
     block->y = 18;
@@ -281,17 +184,7 @@ void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block)
     ResetPosition(block);
 }
 
-GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
-{
-    GAME_STATE *state;
-    state = (GAME_STATE*) memory->permanent_storage;
-    if (state != 0)
-    {
-        memset(audio->stream, 0, audio->size * audio->depth);
-        GetSound(audio, state, ticks);
-        memcpy(state->audio_buffer,audio->stream, 1024 * 4);
-    }
-}
+
 
 bool32 BlockIsValid(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
 {
@@ -393,6 +286,116 @@ bool32 BlockTryMove(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, 
         return true;
     }
     return false;
+}
+
+//******************************************************************************
+//**************************** DRAW ********************************************
+//******************************************************************************
+
+void DrawPoint(PIXEL_BACKBUFFER* buffer, int x, int y, uint8 color)
+{
+    uint8* pixel_quad = (uint8*) buffer->pixels + ((x + (y*GAME_WIDTH)) / 4);
+    int position = (x + (y*GAME_WIDTH)) % 4;
+    uint8 mask = 3 << position;
+    *pixel_quad = (*pixel_quad & ~mask) | (color << (position * 2));
+}
+
+void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
+{
+    uint8* pixel_quad_row = (uint8*) buffer->pixels + ((x + (y*GAME_WIDTH)) / 4);
+    for (int row=0; row < h; row++)
+    {
+        if (y + row >= 0 && y + row < GAME_HEIGHT)
+        {
+            uint8* pixel_quad = pixel_quad_row;
+            int position ((x + ((y + row)*GAME_WIDTH)) % 4);
+            for (int col=0; col < w; col++)
+            {
+                if (x + col >= 0 && x + col < GAME_WIDTH)
+                {
+                    uint8 mask = 3 << (position * 2);
+                    *pixel_quad = (*pixel_quad & ~mask) | (color << (position * 2));
+                    position++;
+                    if (position == 4)
+                    {
+                        position = 0;
+                        *pixel_quad++;
+                    }
+                }
+            }
+        }
+        pixel_quad_row += buffer->pitch;
+    }
+}
+
+void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, int kind)
+{
+    int screen_x, screen_y;
+    if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
+    {
+        screen_x = x * 8;
+        screen_y = BOARD_Y + y * 8;
+    }
+    else
+    {
+        return;
+    }
+    if (kind ==0)
+    {
+        DrawRect(buffer, screen_x, screen_y, 8, 8, 0);
+    }
+    if (kind == 1)
+    {
+        DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 2);
+        DrawRect(buffer, screen_x, screen_y, 1, 7, 0);
+        DrawRect(buffer, screen_x, screen_y + 7, 7, 1, 0);
+        DrawRect(buffer, screen_x + 1, screen_y, 7, 1, 3);
+        DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 7, 3);
+    }
+}
+
+void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, int kind)
+{
+    int tiles[4][2];
+    int length = GetBlockTiles(tiles, block.rotate);
+    for (int i=0; i < length; i++)
+    {
+        DrawTile(buffer, block.x + tiles[i][0], block.y + tiles[i][1], kind);
+    }
+}
+
+void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block)
+{
+    DrawBlock(buffer, block, 1);
+}
+
+void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
+{
+    GAME_BLOCK landing_block = block;
+    int landing = GetBlockLanding(board, block);
+    if (landing != block.y)
+    {
+        landing_block.y = landing;
+        DrawBlock(buffer, landing_block, 0);
+    }
+}
+
+//******************************************************************************
+//**************************** MAIN ********************************************
+//******************************************************************************
+
+
+
+GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
+{
+    GAME_STATE *state;
+    state = (GAME_STATE*) memory->permanent_storage;
+    if (state != 0)
+    {
+        memset(audio->stream, 0, audio->size * audio->depth);
+        GetSound(audio, state, ticks);
+        memcpy(state->audio_buffer,audio->stream, 1024 * 4);
+    }
 }
 
 bool32 Keypress(GAME_BUTTON_STATE *button)
