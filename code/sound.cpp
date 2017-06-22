@@ -168,59 +168,61 @@ void GetSound(GAME_AUDIO* audio, GAME_STATE* state, uint32 ticks)
     cursor.samples_per_tick = audio->samples_per_tick;
     cursor.stream = (float32*)audio->stream;
 
+#if 0
     while(cursor.written < cursor.end)
     {
-        Play(1.0f, &cursor, 0, 0.5f, &(state->instrument));
+        // Play(1.0f, &cursor, 0, 0.5f, &(state->instrument));
         // Play(1.0f, &cursor, 117.188f, 0.5f, &(state->instrument));
         // Play(1.0f, &cursor, AMinaaor(0, 1), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        //
-        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        //
-        // Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        //
-        // Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
-        //
-        // Play(0.5, &cursor,     0,     0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(7), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(6), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
-        //
-        // Play(1.5, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        //
-        // Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
-        // Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
-        //
-        // Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
-        // Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
+
+        Play(0.5, &cursor,     0,     0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(7), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(6), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(5), 0.5f, &(state->instrument));
+
+        Play(1.5, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(1), 0.5f, &(state->instrument));
+        Play(0.5, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(3), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(4), 0.5f, &(state->instrument));
+
+        Play(1.0, &cursor, AMinor(2), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor, AMinor(0), 0.5f, &(state->instrument));
+        Play(1.0, &cursor,     0,     0.5f, &(state->instrument));
     }
+#endif
     audio->written += audio->size / samples_per_beat;
 }

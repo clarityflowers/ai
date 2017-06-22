@@ -30,23 +30,22 @@ typedef uint64_t uint64;
 typedef float float32;
 typedef double float64;
 
+typedef size_t memory_index;
+
 #define Kilobytes(Value) (Value*1024LL)
 #define Megabytes(Value) (Kilobytes(Value)*1024LL)
 #define Gigabytes(Value) (Megabytes(Value)*1024LL)
 #define Terabytes(Value) (Gigabytes(Value)*1024LL)
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
-
 struct GAME_MEMORY
 {
     bool32 is_initialized;
 
     uint64 permanent_storage_size;
     void* permanent_storage; // NOTE(casey): REQUIRED to be cleared to zero at startup
-    int permanent_storage_offset;
 
     uint64 transient_storage_size;
     void* transient_storage; // NOTE(casey): REQUIRED to be cleared to zero at startup
-    int transient_storage_offset;
 };
 
 struct GAME_AUDIO

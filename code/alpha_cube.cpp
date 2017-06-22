@@ -6,8 +6,6 @@
 #include <math.h>
 
 
-#define GAME_HEIGHT 240
-#define GAME_WIDTH 256
 #define GAME_COLOR_DEPTH 2
 #define GAME_PITCH (GAME_WIDTH * GAME_COLOR_DEPTH / 8)
 
@@ -45,18 +43,6 @@ StopProfiler(uint64 start_time, bool32 print)
     // }
 
     return milliseconds;
-}
-
-//******************************************************************************
-//**************************** MEMORY ******************************************
-//******************************************************************************
-void* AllocatePermanentStorage(GAME_MEMORY* memory, int size)
-{
-    void* result;
-    Assert(memory->permanent_storage_offset + size <= memory->permanent_storage_size);
-    result = ((uint8*)memory->permanent_storage) + memory->permanent_storage_offset;
-    memory->permanent_storage_offset += size;
-    return result;
 }
 
 //******************************************************************************
@@ -143,7 +129,23 @@ int GetBlockTiles(int tiles[][2], int rotate, int kind)
     return length;
 }
 
-int GetBlockLanding(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
+TILE Board_GetTile(BOARD *board, int x, int y)
+{
+    TILE result = board->tiles[(y * board->width) + x];
+    return result;
+}
+
+void Board_SetTile(BOARD *board, int x, int y, TILE value)
+{
+    board->tiles[(y * board->width) + x] = value;
+}
+
+void Board_Clear(BOARD *board)
+{
+
+}
+
+int GetBlockLanding(BOARD *board, GAME_BLOCK block)
 {
     int col;
     int tiles[4][2];
@@ -155,7 +157,7 @@ int GetBlockLanding(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
         {
             int x = block.x + tiles[i][0];
             int y = col - 1 + tiles[i][1];
-            if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT || board[y][x])
+            if (x < 0 || x >= board->width || y < 0 || y >= board->height || Board_GetTile(board, x, y).kind)
             {
                 goto END;
             }
@@ -172,22 +174,19 @@ void ResetPosition(GAME_BLOCK* block, int kind)
     block->kind = kind;
 }
 
-void PlaceTile(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], int x, int y)
-{
-    board[y][x] = true;
-}
-
-void PlaceBlockOnBoard(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
+void PlaceBlockOnBoard(BOARD *board, GAME_BLOCK block)
 {
     int tiles[4][2];
     int length = GetBlockTiles(tiles, block.rotate, block.kind);
     for (int i=0; i < length; i++)
     {
-        PlaceTile(board, block.x + tiles[i][0], block.y + tiles[i][1]);
+        TILE tile = {};
+        tile.kind = block.kind + 1;
+        Board_SetTile(board, block.x + tiles[i][0], block.y + tiles[i][1], tile);
     }
 }
 
-void DropBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int kind)
+void DropBlock(BOARD *board, GAME_BLOCK *block, int kind)
 {
     GAME_BLOCK block_to_place = *block;
     block_to_place.y = GetBlockLanding(board, *block);
@@ -195,7 +194,7 @@ void DropBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int k
     ResetPosition(block, kind);
 }
 
-void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int kind)
+void PlaceBlock(BOARD *board, GAME_BLOCK *block, int kind)
 {
     PlaceBlockOnBoard(board, *block);
     ResetPosition(block, kind);
@@ -203,7 +202,7 @@ void PlaceBlock(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int 
 
 
 
-bool32 BlockIsValid(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
+bool32 BlockIsValid(BOARD *board, GAME_BLOCK block)
 {
     bool32 is_valid = true;
     int tiles[4][2];
@@ -213,7 +212,7 @@ bool32 BlockIsValid(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
         int x = block.x + tiles[i][0];
         int y = block.y + tiles[i][1];
 
-        if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT || board[y][x])
+        if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT || Board_GetTile(board, x, y).kind)
         {
             is_valid = false;
             break;
@@ -231,7 +230,7 @@ void RotateBlock(GAME_BLOCK *block, int dr)
     block->rotate = (block->rotate + dr) % 4;
 }
 
-bool32 BlockCanMoveHorizontally(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block, int distance)
+bool32 BlockCanMoveHorizontally(BOARD *board, GAME_BLOCK block, int distance)
 {
     while (distance > 0)
     {
@@ -248,7 +247,7 @@ bool32 BlockCanMoveHorizontally(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BL
     return true;
 }
 
-bool32 BlockCanMoveVertically(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block, int distance)
+bool32 BlockCanMoveVertically(BOARD *board, GAME_BLOCK block, int distance)
 {
     while (distance > 0)
     {
@@ -259,41 +258,41 @@ bool32 BlockCanMoveVertically(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOC
     return true;
 }
 
-bool32 BlockTryMoveHorizontally(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int distance)
+bool32 BlockTryMoveHorizontally(BOARD *board, GAME_BLOCK *block, int distance)
 {
     if (!BlockCanMoveHorizontally(board, *block, distance)) return false;
     block->x += distance;
     return true;
 }
 
-bool32 BlockTryMoveVertically(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int distance)
+bool32 BlockTryMoveVertically(BOARD *board, GAME_BLOCK *block, int distance)
 {
     if (!BlockCanMoveVertically(board, *block, distance)) return false;
     block->y += distance;
     return true;
 }
 
-bool32 BlockCanRotate(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block, int dr)
+bool32 BlockCanRotate(BOARD *board, GAME_BLOCK block, int dr)
 {
     RotateBlock(&block, dr);
     return BlockIsValid(board, block);
 }
 
-bool32 BlockCanMove(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block, int dx, int dy, int dr)
+bool32 BlockCanMove(BOARD *board, GAME_BLOCK block, int dx, int dy, int dr)
 {
     return BlockTryMoveVertically(board, &block, dy) &&
            BlockTryMoveHorizontally(board, &block, dx) &&
            BlockCanRotate(board, block, dr);
 }
 
-bool32 BlockTryRotate(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int dr)
+bool32 BlockTryRotate(BOARD *board, GAME_BLOCK *block, int dr)
 {
     if (!BlockCanRotate(board, *block, dr)) return false;
     RotateBlock(block, dr);
     return true;
 }
 
-bool32 BlockTryMove(bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK *block, int dx, int dy, int dr)
+bool32 BlockTryMove(BOARD *board, GAME_BLOCK *block, int dx, int dy, int dr)
 {
     if (BlockCanMove(board, *block, dx, dy, dr))
     {
@@ -345,7 +344,7 @@ void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
     }
 }
 
-void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, int kind)
+void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile)
 {
     int screen_x, screen_y;
     if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
@@ -357,11 +356,11 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, int kind)
     {
         return;
     }
-    if (kind ==0)
+    if (tile.kind == 0)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 0);
     }
-    if (kind == 1)
+    if (tile.kind == 1)
     {
         DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 2);
         DrawRect(buffer, screen_x, screen_y, 1, 7, 0);
@@ -369,31 +368,45 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, int kind)
         DrawRect(buffer, screen_x + 1, screen_y, 7, 1, 3);
         DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 7, 3);
     }
+    if (tile.kind == 2)
+    {
+        DrawRect(buffer, screen_x, screen_y, 8, 8, 2);
+    }
+    if (tile.kind == 3)
+    {
+        DrawRect(buffer, screen_x, screen_y, 8, 8, 3);
+        DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 1);
+    }
 }
 
-void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, int kind)
+void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, bool32 shadow)
 {
     int tiles[4][2];
     int length = GetBlockTiles(tiles, block.rotate, block.kind);
+    TILE tile = {};
+    if (!shadow)
+    {
+        tile.kind = block.kind + 1;
+    }
     for (int i=0; i < length; i++)
     {
-        DrawTile(buffer, block.x + tiles[i][0], block.y + tiles[i][1], kind);
+        DrawTile(buffer, block.x + tiles[i][0], block.y + tiles[i][1], tile);
     }
 }
 
 void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block)
 {
-    DrawBlock(buffer, block, 1);
+    DrawBlock(buffer, block, 0);
 }
 
-void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, bool32 board[BOARD_HEIGHT][BOARD_WIDTH], GAME_BLOCK block)
+void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, BOARD *board, GAME_BLOCK block)
 {
     GAME_BLOCK landing_block = block;
     int landing = GetBlockLanding(board, block);
     if (landing != block.y)
     {
         landing_block.y = landing;
-        DrawBlock(buffer, landing_block, 0);
+        DrawBlock(buffer, landing_block, 1);
     }
 }
 
@@ -434,9 +447,9 @@ int GetRandomKind(int *random_number_index)
     int index = *random_number_index;
     int random = RANDOM_NUMBER_TABLE[index] % 6;
     int result;
-    if (random == 0) result = 2;
-    else if (random <= 3) result = 1;
-    else result = 0;
+    if (random <= 2) result = 0;
+    else if (random <= 4) result = 1;
+    else result = 2;
     *random_number_index += 1;
     return result;
 }
@@ -457,8 +470,14 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     if (!memory->is_initialized)
     {
-        memory->permanent_storage_offset += sizeof(GAME_STATE);
-        buffer->pixels = AllocatePermanentStorage(memory,  (2 * GAME_WIDTH * GAME_HEIGHT) / 8);
+        state->board.width = BOARD_WIDTH;
+        state->board.height = BOARD_HEIGHT;
+        memory_index used_memory = sizeof(GAME_STATE);
+        InitializeArena(&state->board_arena, Kilobytes(3), (uint8 *) memory->permanent_storage + used_memory);
+        used_memory += Kilobytes(3);
+        state->board.tiles = PushArray(&state->board_arena, state->board.width * state->board.height, TILE);
+
+        buffer->pixels = &state->pixels;
         buffer->pitch = 2 * GAME_WIDTH / 8;
         memory->is_initialized = true;
         ResetPosition(&state->block, GetRandomKind(&state->random_index));
@@ -493,29 +512,29 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
         if (Keypress(&keyboard->move_right))
         {
-            if (BlockTryMoveHorizontally(state->board, &state->block, 1))
+            if (BlockTryMoveHorizontally(&state->board, &state->block, 1))
             {
                 state->safety = 2;
             }
         }
         if (Keypress(&keyboard->move_left))
         {
-            if (BlockTryMoveHorizontally(state->board, &state->block, -1))
+            if (BlockTryMoveHorizontally(&state->board, &state->block, -1))
             {
                 state->safety = 2;
             }
         }
         if (Keypress(&keyboard->rotate_clockwise))
         {
-            if (BlockTryRotate(state->board, &state->block, 1)
-                || BlockTryMove(state->board, &state->block,  1,  0, 1)
-                || BlockTryMove(state->board, &state->block,  0,  1, 1)
-                || BlockTryMove(state->board, &state->block,  2,  0, 1)
-                || BlockTryMove(state->board, &state->block,  0,  2, 1)
-                || BlockTryMove(state->board, &state->block, -1,  0, 1)
-                || BlockTryMove(state->board, &state->block,  0, -1, 1)
-                || BlockTryMove(state->board, &state->block, -2,  0, 1)
-                || BlockTryMove(state->board, &state->block,  0, -2, 1)
+            if (BlockTryRotate(&state->board, &state->block, 1)
+                || BlockTryMove(&state->board, &state->block,  1,  0, 1)
+                || BlockTryMove(&state->board, &state->block,  0,  1, 1)
+                || BlockTryMove(&state->board, &state->block,  2,  0, 1)
+                || BlockTryMove(&state->board, &state->block,  0,  2, 1)
+                || BlockTryMove(&state->board, &state->block, -1,  0, 1)
+                || BlockTryMove(&state->board, &state->block,  0, -1, 1)
+                || BlockTryMove(&state->board, &state->block, -2,  0, 1)
+                || BlockTryMove(&state->board, &state->block,  0, -2, 1)
             )
             {
                 state->safety = 2;
@@ -523,15 +542,15 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
         if (Keypress(&keyboard->rotate_counterclockwise))
         {
-            if (BlockTryRotate(state->board, &state->block, -1)
-                || BlockTryMove(state->board, &state->block, -1,  0, -1)
-                || BlockTryMove(state->board, &state->block,  0,  1, -1)
-                || BlockTryMove(state->board, &state->block, -2,  0, -1)
-                || BlockTryMove(state->board, &state->block,  0,  2, -1)
-                || BlockTryMove(state->board, &state->block,  1,  0, -1)
-                || BlockTryMove(state->board, &state->block,  0, -1, -1)
-                || BlockTryMove(state->board, &state->block,  2,  0, -1)
-                || BlockTryMove(state->board, &state->block,  0, -2, -1)
+            if (BlockTryRotate(&state->board, &state->block, -1)
+                || BlockTryMove(&state->board, &state->block, -1,  0, -1)
+                || BlockTryMove(&state->board, &state->block,  0,  1, -1)
+                || BlockTryMove(&state->board, &state->block, -2,  0, -1)
+                || BlockTryMove(&state->board, &state->block,  0,  2, -1)
+                || BlockTryMove(&state->board, &state->block,  1,  0, -1)
+                || BlockTryMove(&state->board, &state->block,  0, -1, -1)
+                || BlockTryMove(&state->board, &state->block,  2,  0, -1)
+                || BlockTryMove(&state->board, &state->block,  0, -2, -1)
             )
             {
                 state->safety = 2;
@@ -539,12 +558,12 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
         if (Keypress(&keyboard->drop))
         {
-            int block_landing = GetBlockLanding(state->board, state->block);
-            DropBlock(state->board, &state->block, GetRandomKind(&state->random_index));
+            int block_landing = GetBlockLanding(&state->board, state->block);
+            DropBlock(&state->board, &state->block, GetRandomKind(&state->random_index));
         }
         if (Keypress(&keyboard->clear_board))
         {
-            memset(state->board, 0, sizeof(state->board)[0][0] * BOARD_WIDTH * BOARD_HEIGHT);
+            memset(state->board.tiles, 0, sizeof(TILE) * state->board.width * state->board.height);
         }
     }
 
@@ -553,7 +572,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         while (beats--)
         {
             // state->clock.bpm += 1;
-            if (state->block.y > 0 && state->block.y != GetBlockLanding(state->board, state->block))
+            if (state->block.y > 0 && state->block.y != GetBlockLanding(&state->board, state->block))
             {
                 state->block.y--;
             }
@@ -563,25 +582,26 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
-                PlaceBlock(state->board, &state->block, GetRandomKind(&state->random_index));
+                PlaceBlock(&state->board, &state->block, GetRandomKind(&state->random_index));
             }
         }
     }
 
-    // DRAW BACKGROUNDa
+    // DRAW BACKGROUNDae
     DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 1);
     DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
 
-    DrawBlockLanding(buffer, state->board, state->block);
+    DrawBlockLanding(buffer, &state->board, state->block);
     DrawCurrentBlock(buffer, state->block);
     {
         for (int row=0; row < BOARD_HEIGHT; row++)
         {
             for (int col=0; col < BOARD_WIDTH; col++)
             {
-                if (state->board[row][col])
+                TILE tile = Board_GetTile(&state->board, col, row);
+                if (tile.kind)
                 {
-                    DrawTile(buffer, col, row, 1);
+                    DrawTile(buffer, col, row, tile);
                 }
             }
         }
