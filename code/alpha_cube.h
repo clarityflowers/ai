@@ -21,6 +21,8 @@ struct GAME_BLOCK
 struct TILE
 {
     int kind;
+    bool32 on_fire;
+    int damage;
 };
 
 struct BOARD
@@ -36,9 +38,13 @@ struct MEMORY_ARENA
     memory_index used;
 };
 
+struct TILE_COORD
+{
+    int x, y;
+};
 
-internal void
-InitializeArena(MEMORY_ARENA *arena, memory_index size, uint8 *base)
+
+internal void InitializeArena(MEMORY_ARENA *arena, memory_index size, uint8 *base)
 {
     arena->size = size;
     arena->base = base;
@@ -47,14 +53,24 @@ InitializeArena(MEMORY_ARENA *arena, memory_index size, uint8 *base)
 
 #define PushStruct(arena, type) (type *)PushSize_(arena, sizeof(type))
 #define PushArray(arena, count, type) (type *)PushSize_(arena, (count)*sizeof(type))
-void *
-PushSize_(MEMORY_ARENA *arena, memory_index size)
+void * PushSize_(MEMORY_ARENA *arena, memory_index size)
 {
     Assert((arena->used + size) <= arena->size);
     void *result = arena->base + arena->used;
     arena->used += size;
 
-    return(result);
+    return result;
+}
+
+#define PopStruct(arena, type) (type *)PopSize_(arena, sizeof(type))
+#define PopArray(arena, count, type) (type *)PopSize_(arena, (count)*sizeof(type))
+void * PopSize_(MEMORY_ARENA *arena, memory_index size)
+{
+    Assert((arena->used - size) >= 0);
+    void *result = arena->base + arena->used - size;
+    arena->used -= size;
+
+    return result;
 }
 
 
@@ -72,6 +88,7 @@ struct GAME_STATE
     INSTRUMENT_STATE instrument_state;
     INSTRUMENT instrument;
     AUDIO_CLOCK clock;
+    int timer;
     int beats;
     float32 audio_buffer[1024];
     int random_index;

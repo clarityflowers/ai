@@ -131,7 +131,11 @@ int GetBlockTiles(int tiles[][2], int rotate, int kind)
 
 TILE Board_GetTile(BOARD *board, int x, int y)
 {
-    TILE result = board->tiles[(y * board->width) + x];
+    TILE result = {};
+    if (x >= 0 && x < board->width && y >= 0 && y < board->height)
+    {
+        result = board->tiles[(y * board->width) + x];
+    }
     return result;
 }
 
@@ -140,9 +144,9 @@ void Board_SetTile(BOARD *board, int x, int y, TILE value)
     board->tiles[(y * board->width) + x] = value;
 }
 
-void Board_Clear(BOARD *board)
+void Board_ClearTile(BOARD *board, int x, int y)
 {
-
+    board->tiles[(y * board->width) + x] = {};
 }
 
 int GetBlockLanding(BOARD *board, GAME_BLOCK block)
@@ -182,6 +186,7 @@ void PlaceBlockOnBoard(BOARD *board, GAME_BLOCK block)
     {
         TILE tile = {};
         tile.kind = block.kind + 1;
+        if (tile.kind == 3) tile.on_fire = true;
         Board_SetTile(board, block.x + tiles[i][0], block.y + tiles[i][1], tile);
     }
 }
@@ -371,6 +376,9 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile)
     if (tile.kind == 2)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 2);
+        if (tile.on_fire) {
+            DrawRect(buffer, screen_x + 2, screen_y + 2, 4, 4, 1);
+        }
     }
     if (tile.kind == 3)
     {
@@ -447,9 +455,12 @@ int GetRandomKind(int *random_number_index)
     int index = *random_number_index;
     int random = RANDOM_NUMBER_TABLE[index] % 6;
     int result;
-    if (random <= 2) result = 0;
-    else if (random <= 4) result = 1;
-    else result = 2;
+    if (index == 12) result = 2;
+    else if (index % 2 == 0) result = 0;
+    else result = 1;
+    // if (random <= 2) result = 0;
+    // else if (random <= 4) result = 1;
+    // else result = 2;
     *random_number_index += 1;
     return result;
 }
@@ -473,8 +484,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->board.width = BOARD_WIDTH;
         state->board.height = BOARD_HEIGHT;
         memory_index used_memory = sizeof(GAME_STATE);
-        InitializeArena(&state->board_arena, Kilobytes(3), (uint8 *) memory->permanent_storage + used_memory);
-        used_memory += Kilobytes(3);
+        InitializeArena(&state->board_arena, Kilobytes(16), (uint8 *) memory->permanent_storage + used_memory);
+        used_memory += Kilobytes(16);
         state->board.tiles = PushArray(&state->board_arena, state->board.width * state->board.height, TILE);
 
         buffer->pixels = &state->pixels;
@@ -492,6 +503,10 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     int new_beats = state->clock.time.beats;
     int beats = max(new_beats - state->beats, 0);
     state->beats = new_beats;
+
+    state->timer += ticks;
+    int cycles = state->timer / 1000;
+    state->timer %= 1000;
 
     pixels = buffer->pixels;
 
@@ -587,7 +602,64 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
 
-    // DRAW BACKGROUNDae
+
+
+    while (cycles--)
+    {
+        // BURN DAMAGE
+        {
+            BOARD *board = &state->board;
+            for (int y=0; y < board->height; y++)
+            {
+                for (int x=0; x < board->width; x++)
+                {
+                    TILE tile = Board_GetTile(board, x, y);
+                    if (tile.on_fire)
+                    {
+                        tile.damage++;
+                        if (tile.damage > 3) Board_ClearTile(board, x, y);
+                        else Board_SetTile(board, x, y, tile);
+                    }
+                }
+            }
+        }
+
+        // PROPAGATE FIRE
+        {
+            int to_burn_count = 0;
+            BOARD *board = &state->board;
+            for (int y = 0; y < board->height; y++)
+            {
+                for (int x = 0; x < board->width; x++)
+                {
+                    TILE tile = Board_GetTile(board, x, y);
+                    if (tile.kind == 2 && !tile.on_fire)
+                    {
+                        if (Board_GetTile(board, x, y + 1).on_fire ||
+                        Board_GetTile(board, x + 1, y).on_fire ||
+                        Board_GetTile(board, x, y - 1).on_fire ||
+                        Board_GetTile(board, x - 1, y).on_fire)
+                        {
+                            TILE_COORD *coord = PushStruct(&state->board_arena, TILE_COORD);
+                            coord->x = x; coord->y = y;
+                            to_burn_count++;
+                        }
+                    }
+                }
+            }
+            while (to_burn_count > 0)
+            {
+                TILE_COORD *coord = PopStruct(&state->board_arena, TILE_COORD);
+                TILE tile = Board_GetTile(board, coord->x, coord->y);
+                tile.on_fire = true;
+                Board_SetTile(board, coord->x, coord->y, tile);
+                to_burn_count--;
+            }
+        }
+    }
+
+
+    // DRAW BACKGROUND
     DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 1);
     DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
 

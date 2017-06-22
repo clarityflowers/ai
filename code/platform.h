@@ -93,7 +93,7 @@ struct PIXEL_BACKBUFFER
     int h, w, pitch, depth;
 };
 
-#define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 delta_time )
+#define GAME_UPDATE_AND_RENDER(name) int name( GAME_MEMORY *memory, PIXEL_BACKBUFFER *render_buffer, GAME_INPUT *input, uint32 ticks )
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 
 #define GAME_GET_SOUND_SAMPLES(name) void name( GAME_MEMORY *memory, GAME_AUDIO *audio, uint32 ticks)
