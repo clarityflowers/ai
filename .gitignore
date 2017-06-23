@@ -4,3 +4,4 @@ handmade
 *old*
 .vscode
 build
+*.tmp

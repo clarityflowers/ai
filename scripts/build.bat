@@ -1,4 +1,5 @@
 @echo off
+echo WAITING FOR PDB > lock.tmp
 set SDLPath=C:\projects\build\SDL2-2.0.4
 set GifferPath=C:\projects\build\giffer
 
@@ -22,4 +23,5 @@ del *.pdb > NUL 2> NUL
 cl %CommonCompilerFlags% ..\code\alpha_cube.cpp -Fmalpha_cube.map -LD /I %SDLPath%\include /link -incremental:no -opt:ref -PDB:alpha_cube_%random%.pdb -EXPORT:GameUpdateAndRender -EXPORT:GameGetSoundSamples /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
 REM -EXPORT:GameGetSoundSamples
 cl %CommonCompilerFlags% ..\code\alpha_cube_win.cpp -Fmalpha_cube_win32.map /I %GifferPath%\ %GifferPath%\giffer.lib /I %SDLPath%\include  /link %CommonLinkerFlags%  /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
+del lock.tmp
 popd

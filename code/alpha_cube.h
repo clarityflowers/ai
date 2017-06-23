@@ -89,6 +89,7 @@ struct GAME_STATE
     INSTRUMENT instrument;
     AUDIO_CLOCK clock;
     int timer;
+    int gravity_timer;
     int beats;
     float32 audio_buffer[1024];
     int random_index;

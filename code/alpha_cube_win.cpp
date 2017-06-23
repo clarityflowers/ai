@@ -125,27 +125,31 @@ Win_GetLastWriteTime(char *filename)
 	return last_write_time;
 }
 
-internal WIN_GAME_CODE
-Win_LoadGameCode(char *source_dll_name, char *temp_dll_name)
+internal bool32
+Win_LoadGameCode(WIN_GAME_CODE *game_code, char *source_dll_name, char *temp_dll_name, char *game_lock_name)
 {
-	WIN_GAME_CODE result = {};
+    bool32 result = false;
+    WIN32_FILE_ATTRIBUTE_DATA ignored;
+    if (!GetFileAttributesEx(game_lock_name, GetFileExInfoStandard, &ignored))
+    {
+        game_code->dll_last_write_time = Win_GetLastWriteTime(source_dll_name);
+        CopyFile(source_dll_name, temp_dll_name, FALSE);
+        game_code->dll = LoadLibraryA(temp_dll_name);
 
-	result.dll_last_write_time = Win_GetLastWriteTime(source_dll_name);
-	CopyFile(source_dll_name, temp_dll_name, FALSE);
-	result.dll = LoadLibraryA(temp_dll_name);
-
-	if(result.dll)
-	{
-		result.UpdateAndRender = (game_update_and_render *)GetProcAddress(result.dll, "GameUpdateAndRender" );
-		result.GetSoundSamples = (game_get_sound_samples *)GetProcAddress(result.dll, "GameGetSoundSamples" );
-		result.is_valid = (result.UpdateAndRender && result.GetSoundSamples);
-	}
-	if(!result.is_valid)
-	{
-		result.UpdateAndRender = 0;
-		result.GetSoundSamples = 0;
-	}
-	return result;
+        if(game_code->dll)
+        {
+            game_code->UpdateAndRender = (game_update_and_render *)GetProcAddress(game_code->dll, "GameUpdateAndRender" );
+            game_code->GetSoundSamples = (game_get_sound_samples *)GetProcAddress(game_code->dll, "GameGetSoundSamples" );
+            game_code->is_valid = (game_code->UpdateAndRender && game_code->GetSoundSamples);
+        }
+        if(!game_code->is_valid)
+        {
+            game_code->UpdateAndRender = 0;
+            game_code->GetSoundSamples = 0;
+        }
+        result = true;
+    }
+    return result;
 }
 
 internal void
@@ -211,7 +215,8 @@ WinMain(
 	WIN_GAME_CODE game = {};
 	bool32 game_is_running = 0;
 	char source_game_code_dll_full_path[WIN32_STATE_FILE_NAME_COUNT] = {};
-	char temp_game_code_dll_full_path[WIN32_STATE_FILE_NAME_COUNT] = {};
+    char temp_game_code_dll_full_path[WIN32_STATE_FILE_NAME_COUNT] = {};
+	char game_code_lock_full_path[WIN32_STATE_FILE_NAME_COUNT] = {};
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	SDL_Texture *texture;
@@ -236,8 +241,9 @@ WinMain(
 
 	Win_GetEXEFileName(&state);
 	Win_BuildEXEPathFileName(&state, "alpha_cube.dll", sizeof(source_game_code_dll_full_path), source_game_code_dll_full_path);
-	Win_BuildEXEPathFileName(&state, "alpha_cube_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
-	game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
+    Win_BuildEXEPathFileName(&state, "alpha_cube_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
+	Win_BuildEXEPathFileName(&state, "lock.tmp", sizeof(game_code_lock_full_path), game_code_lock_full_path);
+	Win_LoadGameCode(&game, source_game_code_dll_full_path, temp_game_code_dll_full_path, game_code_lock_full_path);
 
 	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO ) < 0 )
     {
@@ -430,7 +436,7 @@ WinMain(
 		if (CompareFileTime(&new_dll_write_time, &game.dll_last_write_time) != 0)
 		{
 			Win_UnloadGameCode(&game);
-			game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
+			Win_LoadGameCode(&game, source_game_code_dll_full_path, temp_game_code_dll_full_path, game_code_lock_full_path);
 		}
 
 

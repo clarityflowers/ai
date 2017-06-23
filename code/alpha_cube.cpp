@@ -139,6 +139,11 @@ TILE Board_GetTile(BOARD *board, int x, int y)
     return result;
 }
 
+bool32 Board_TileExists(BOARD *board, int x, int y)
+{
+    return Board_GetTile(board, x, y).kind > 0;
+}
+
 void Board_SetTile(BOARD *board, int x, int y, TILE value)
 {
     board->tiles[(y * board->width) + x] = value;
@@ -147,6 +152,14 @@ void Board_SetTile(BOARD *board, int x, int y, TILE value)
 void Board_ClearTile(BOARD *board, int x, int y)
 {
     board->tiles[(y * board->width) + x] = {};
+}
+
+void Board_Reset(BOARD *board)
+{
+    memset(board->tiles, 0, sizeof(TILE) * board->width * board->height);
+    TILE tile = { 1 };
+    // Board_SetTile(board, 12, 7, tile);
+    // Board_SetTile(board, 13, 7, tile);
 }
 
 int GetBlockLanding(BOARD *board, GAME_BLOCK block)
@@ -465,6 +478,27 @@ int GetRandomKind(int *random_number_index)
     return result;
 }
 
+int8 CheckTileCanFall(BOARD *board, int8* tile_fall_map, int x, int y)
+{
+    int8 *tile_fall = tile_fall_map + (y * board->width) + x;
+    if (*tile_fall == 0)
+    {
+        if (!Board_TileExists(board, x, y))
+        {
+            *tile_fall = 1;
+        }
+        else if (y == 0)
+        {
+            *tile_fall = -1;
+        }
+        else
+        {
+            *tile_fall = CheckTileCanFall(board, tile_fall_map, x, y - 1);
+        }
+    }
+    return *tile_fall;
+}
+
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     GAME_STATE *state;
@@ -504,9 +538,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     int beats = max(new_beats - state->beats, 0);
     state->beats = new_beats;
 
-    state->timer += ticks;
-    int cycles = state->timer / 1000;
-    state->timer %= 1000;
 
     pixels = buffer->pixels;
 
@@ -578,11 +609,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
         if (Keypress(&keyboard->clear_board))
         {
-            memset(state->board.tiles, 0, sizeof(TILE) * state->board.width * state->board.height);
+            Board_Reset(&state->board);
         }
     }
 
-    // BLOCKS FALL
+    // BLOCK FALLS
     {
         while (beats--)
         {
@@ -604,6 +635,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
 
 
+    state->timer += ticks;
+    int cycles = state->timer / 1000;
+    state->timer %= 1000;
     while (cycles--)
     {
         // BURN DAMAGE
@@ -658,28 +692,68 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
 
-
-    // DRAW BACKGROUND
-    DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 1);
-    DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
-
-    DrawBlockLanding(buffer, &state->board, state->block);
-    DrawCurrentBlock(buffer, state->block);
+    // GRAVITY
     {
-        for (int row=0; row < BOARD_HEIGHT; row++)
+        state->gravity_timer += ticks;
+        int cycles = state->gravity_timer / 100;
+        state->gravity_timer %= 100;
+        BOARD *board = &state->board;
+        int8 *tile_fall_map = PushArray(&state->board_arena, board->height * board->width, int8);
+        int8 *should_tile_fall = tile_fall_map;
+        while (cycles--)
         {
-            for (int col=0; col < BOARD_WIDTH; col++)
+            memset(tile_fall_map, 0, sizeof(int8) * board->height * board->width);
+            for (int y = 0; y < board->height; y++)
             {
-                TILE tile = Board_GetTile(&state->board, col, row);
-                if (tile.kind)
+                for (int x = 0; x < board->width; x++)
                 {
-                    DrawTile(buffer, col, row, tile);
+                    if (Board_TileExists(board, x, y))
+                    {
+                        CheckTileCanFall(board, tile_fall_map, x, y);
+                    }
+                }
+            }
+            for (int y = 0; y < board->height; y++)
+            {
+                for (int x = 0; x < board->width; x++)
+                {
+                    if (Board_TileExists(board, x, y) && tile_fall_map[(y * board->width) + x] == 1)
+                    {
+                        TILE tile = Board_GetTile(board, x, y);
+                        Board_ClearTile(board, x, y);
+                        Board_SetTile(board, x, y - 1, tile);
+                    }
+                }
+            }
+        }
+
+        PopArray(&state->board_arena, board->height * board->width, int8);
+    }
+
+
+    // DRAW
+    {
+        DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 1);
+        DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
+
+        DrawBlockLanding(buffer, &state->board, state->block);
+        DrawCurrentBlock(buffer, state->block);
+        {
+            for (int row=0; row < BOARD_HEIGHT; row++)
+            {
+                for (int col=0; col < BOARD_WIDTH; col++)
+                {
+                    TILE tile = Board_GetTile(&state->board, col, row);
+                    if (tile.kind)
+                    {
+                        DrawTile(buffer, col, row, tile);
+                    }
                 }
             }
         }
     }
 
-    // DRAW ONTO BACKBUFFER
+    // COPY ONTO BACKBUFFER
     {
         uint8* pixel_row;
         float horizontal_factor, vertical_factor;
