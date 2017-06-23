@@ -12,7 +12,7 @@ pushd ..\build
 IF EXIST win32.ilk DEL /F /S /Q /A win32.ilk
 IF EXIST win32.pdb DEL /F /S /Q /A win32.pdb
 
-IF EXIST SDLPath\lib\x64\SDL2.dll copy SDLPath\lib\x64\SDL2.dll SDL2.dll
+copy %SDLPath%\lib\x64\SDL2.dll SDL2.dll
 
 REM 32-bit build
 REM cl %CommonCompilerFlags% ..\code\win32.cpp /link -subsystem:windows,5.1 %CommonLinkerFlags%
