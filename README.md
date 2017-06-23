@@ -1,6 +1,8 @@
 # SDL-tetris
 I'm making a little game in C++, inspired by tetris and emergent gameplay systems.
 
+![gif](https://raw.githubusercontent.com/cchanna/Cube/assets/gif.gif)
+
 ## How to build
 Make sure you have Visual Studio's C++ developer tools and SDL 2.0.4 installed
 somewhere.
