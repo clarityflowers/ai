@@ -2,6 +2,7 @@
 
 #include "platform.h"
 #include "sound.h"
+#include "board.h"
 
 #define BOARD_WIDTH 32
 #define BOARD_HEIGHT 20
@@ -13,22 +14,23 @@ struct RGBA_COLOR
     uint8 r,g,b,a;
 };
 
+struct TILE_OFFSET
+{
+    int8 x, y;
+};
+
+struct BLOCK_DEF
+{
+    TileKind tile_kind;
+    TILE_OFFSET offsets[4];
+    int num_tiles;
+};
+
 struct GAME_BLOCK
 {
     int x, y, rotate, kind;
-};
-
-struct TILE
-{
-    int kind;
-    bool32 on_fire;
-    int damage;
-};
-
-struct BOARD
-{
+    BLOCK_DEF *def;
     TILE* tiles;
-    int width, height;
 };
 
 struct MEMORY_ARENA
@@ -76,7 +78,8 @@ void * PopSize_(MEMORY_ARENA *arena, memory_index size)
 
 struct GAME_STATE
 {
-    MEMORY_ARENA buffer_arena;
+    MEMORY_ARENA def_arena;
+    BLOCK_DEF *block_defs;
     MEMORY_ARENA board_arena;
     RGBA_COLOR palettes[3][4];
     PIXEL_BACKBUFFER buffer;
@@ -92,7 +95,7 @@ struct GAME_STATE
     int gravity_timer;
     int beats;
     float32 audio_buffer[1024];
-    int random_index;
+    int random_number_index;
 };
 
 #define ALPHA_CUBE_H

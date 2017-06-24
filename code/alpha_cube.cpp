@@ -14,6 +14,7 @@
 
 #include "sound.cpp"
 #include "random.h"
+#include "board.cpp"
 
 //******************************************************************************
 //**************************** PROFILER ****************************************
@@ -79,143 +80,131 @@ int InitColors(GAME_STATE* state)
     return 1;
 }
 
+void RotateTileOffsets(TILE_OFFSET out[4], TILE_OFFSET in[4], int count, int amount)
+{
+    amount *= -1;
+    while (amount < 0) amount += 4;
 
+    int8 sin = (int8)((amount % 4) - 2) % 2;
+    int8 cos = (int8)(((amount + 3) % 4) - 2) %2;
+    for (int i=0; i < count; i++)
+    {
+        int8 x = in[i].x;
+        int8 y = in[i].y;
+        out[i].x = (cos * x) + (sin * y);
+        out[i].y = (-sin * x) + (cos * y);
+    }
+}
 
 //******************************************************************************
 //**************************** BLOCKS ******************************************
 //******************************************************************************
 
-int GetBaseTilesForKind(int tiles[][2], int kind)
+void GetTileCoordsForBlock(TILE_COORD coords[4], GAME_BLOCK block)
 {
-    if (kind == 0)
+    TILE_OFFSET offsets[4];
+    RotateTileOffsets(offsets, block.def->offsets, block.def->num_tiles, block.rotate);
+    for (int i=0; i < block.def->num_tiles; i++)
     {
-        tiles[0][0] =  0; tiles[0][1] =  0;
-        tiles[1][0] =  1; tiles[1][1] =  0;
-        tiles[2][0] =  1; tiles[2][1] = -1;
-        tiles[3][0] = -1; tiles[3][1] =  0;
-        return 4;
+        coords[i].x = offsets[i].x + block.x;
+        coords[i].y = offsets[i].y + block.y;
     }
-    if (kind == 1)
-    {
-        tiles[0][0] =  0; tiles[0][1] =  0;
-        tiles[1][0] =  1; tiles[1][1] =  0;
-        tiles[2][0] =  0; tiles[2][1] = -1;
-        tiles[3][0] = -1; tiles[3][1] =  0;
-        return 4;
-    }
-    if (kind == 2)
-    {
-        tiles[0][0] =  0; tiles[0][1] =  0;
-        return 1;
-    }
-    Assert(false);
-    return 0;
-}
-
-int GetBlockTiles(int tiles[][2], int rotate, int kind)
-{
-    int these_tiles[4][2];
-    int length = GetBaseTilesForKind(these_tiles, kind);
-    for (int i=0; i < 4; i++)
-    {
-        tiles[i][0] = (rotate % 2) ?  these_tiles[i][1] : these_tiles[i][0];
-        tiles[i][1] = (rotate % 2) ? -these_tiles[i][0] : these_tiles[i][1];
-        if (rotate >= 2)
-        {
-            tiles[i][0] *= -1;
-            tiles[i][1] *= -1;
-        }
-    }
-    return length;
-}
-
-TILE Board_GetTile(BOARD *board, int x, int y)
-{
-    TILE result = {};
-    if (x >= 0 && x < board->width && y >= 0 && y < board->height)
-    {
-        result = board->tiles[(y * board->width) + x];
-    }
-    return result;
-}
-
-bool32 Board_TileExists(BOARD *board, int x, int y)
-{
-    return Board_GetTile(board, x, y).kind > 0;
-}
-
-void Board_SetTile(BOARD *board, int x, int y, TILE value)
-{
-    board->tiles[(y * board->width) + x] = value;
-}
-
-void Board_ClearTile(BOARD *board, int x, int y)
-{
-    board->tiles[(y * board->width) + x] = {};
-}
-
-void Board_Reset(BOARD *board)
-{
-    memset(board->tiles, 0, sizeof(TILE) * board->width * board->height);
-    TILE tile = { 1 };
-    // Board_SetTile(board, 12, 7, tile);
-    // Board_SetTile(board, 13, 7, tile);
 }
 
 int GetBlockLanding(BOARD *board, GAME_BLOCK block)
 {
-    int col;
-    int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate, block.kind);
-
-    for (col=block.y; col > 0; col--)
+    TILE_COORD coords[4];
+    GetTileCoordsForBlock(coords, block);
+    int step_down;
+    for (step_down = 0; step_down < block.y; step_down++)
     {
-        for (int i=0; i < length; i++)
+        for (int i=0; i < block.def->num_tiles; i++)
         {
-            int x = block.x + tiles[i][0];
-            int y = col - 1 + tiles[i][1];
-            if (x < 0 || x >= board->width || y < 0 || y >= board->height || Board_GetTile(board, x, y).kind)
+            int x = coords[i].x;
+            int y = coords[i].y - step_down - 1;
+            if (x < 0 || x >= board->width || y < 0 || y >= board->height || Board_TileExists(board, x, y))
             {
                 goto END;
             }
         }
     }
-    END: return col;
+    END:
+    int result = block.y - step_down;
+    return result;
 }
 
-void ResetPosition(GAME_BLOCK* block, int kind)
-{
-    block->y = 18;
-    block->x = 16;
-    block->rotate = 0;
-    block->kind = kind;
-}
 
 void PlaceBlockOnBoard(BOARD *board, GAME_BLOCK block)
 {
-    int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate, block.kind);
-    for (int i=0; i < length; i++)
+    TILE_COORD coords[4];
+    GetTileCoordsForBlock(coords, block);
+    for (int i=0; i < block.def->num_tiles; i++)
     {
-        TILE tile = {};
-        tile.kind = block.kind + 1;
-        if (tile.kind == 3) tile.on_fire = true;
-        Board_SetTile(board, block.x + tiles[i][0], block.y + tiles[i][1], tile);
+        Board_SetTile(board, coords[i].x, coords[i].y, block.tiles[i]);
     }
 }
 
-void DropBlock(BOARD *board, GAME_BLOCK *block, int kind)
+void Block_GetNext(GAME_BLOCK *block, BLOCK_DEF* defs, int *random_number_index)
+{
+    int def = 0;
+    // if (*random_number_index % 2 == 1)
+    // {
+    //     def = 1;
+    // }
+    *random_number_index += 1;
+    block->def = &defs[def];
+    block->y = 18;
+    block->x = 16;
+    block->rotate = 0;
+    block->kind = 0;
+    for (int i=0; i < block->def->num_tiles; i++)
+    {
+        block->tiles[i].kind = block->def->tile_kind;
+        block->tiles[i].on_fire = false;
+        block->tiles[i].health = false;
+        TILE_OFFSET offset = block->def->offsets[i];
+        for (int c = 0; c < 4; c++)
+        {
+            block->tiles[i].connected[c] = false;
+        }
+        for (int j=0; j < block->def->num_tiles; j++)
+        {
+            if (j != i)
+            {
+                TILE_OFFSET other = block->def->offsets[j];
+                if (other.x == offset.x && other.y == offset.y + 1)
+                {
+                    block->tiles[i].connected[0] = true;
+                }
+                if (other.y == offset.y && other.x == offset.x + 1)
+                {
+                    block->tiles[i].connected[1] = true;
+                }
+                if (other.x == offset.x && other.y == offset.y - 1)
+                {
+                    block->tiles[i].connected[2] = true;
+                }
+                if (other.y == offset.y && other.x == offset.x - 1)
+                {
+                    block->tiles[i].connected[3] = true;
+                }
+            }
+        }
+    }
+}
+
+void DropBlock(BOARD *board, GAME_BLOCK *block, BLOCK_DEF *defs, int *random_number_index)
 {
     GAME_BLOCK block_to_place = *block;
     block_to_place.y = GetBlockLanding(board, *block);
     PlaceBlockOnBoard(board, block_to_place);
-    ResetPosition(block, kind);
+    Block_GetNext(block, defs, random_number_index);
 }
 
-void PlaceBlock(BOARD *board, GAME_BLOCK *block, int kind)
+void PlaceBlock(BOARD *board, GAME_BLOCK *block, BLOCK_DEF *defs, int *random_number_index)
 {
     PlaceBlockOnBoard(board, *block);
-    ResetPosition(block, kind);
+    Block_GetNext(block, defs, random_number_index);
 }
 
 
@@ -223,12 +212,12 @@ void PlaceBlock(BOARD *board, GAME_BLOCK *block, int kind)
 bool32 BlockIsValid(BOARD *board, GAME_BLOCK block)
 {
     bool32 is_valid = true;
-    int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate, block.kind);
-    for (int i=0; i < length; i++)
+    TILE_COORD coords[4];
+    GetTileCoordsForBlock(coords, block);
+    for (int i=0; i < block.def->num_tiles; i++)
     {
-        int x = block.x + tiles[i][0];
-        int y = block.y + tiles[i][1];
+        int x = coords[i].x;
+        int y = coords[i].y;
 
         if (x < 0 || x >= BOARD_WIDTH || y < 0 || y >= BOARD_HEIGHT || Board_GetTile(board, x, y).kind)
         {
@@ -246,6 +235,27 @@ void RotateBlock(GAME_BLOCK *block, int dr)
         dr += 4;
     }
     block->rotate = (block->rotate + dr) % 4;
+}
+
+void RotateBlockTiles(GAME_BLOCK *block, int dr)
+{
+    while (dr < 0)
+    {
+        dr += 4;
+    }
+    RotateBlock(block, dr);
+    for (int i = 0; i < block->def->num_tiles; i++)
+    {
+        bool32 connected[4];
+        for (int c = 0; c < 4; c++)
+        {
+            connected[c] = block->tiles[i].connected[c];
+        }
+        for (int c = 0; c < 4; c++)
+        {
+            block->tiles[i].connected[c] = connected[(c - dr + 4) % 4];
+        }
+    }
 }
 
 bool32 BlockCanMoveHorizontally(BOARD *board, GAME_BLOCK block, int distance)
@@ -306,7 +316,7 @@ bool32 BlockCanMove(BOARD *board, GAME_BLOCK block, int dx, int dy, int dr)
 bool32 BlockTryRotate(BOARD *board, GAME_BLOCK *block, int dr)
 {
     if (!BlockCanRotate(board, *block, dr)) return false;
-    RotateBlock(block, dr);
+    RotateBlockTiles(block, dr);
     return true;
 }
 
@@ -316,7 +326,7 @@ bool32 BlockTryMove(BOARD *board, GAME_BLOCK *block, int dx, int dy, int dr)
     {
         block->x += dx;
         block->y += dy;
-        RotateBlock(block, dr);
+        RotateBlockTiles(block, dr);
         return true;
     }
     return false;
@@ -330,7 +340,7 @@ void DrawPoint(PIXEL_BACKBUFFER* buffer, int x, int y, uint8 color)
 {
     uint8* pixel_quad = (uint8*) buffer->pixels + ((x + (y*GAME_WIDTH)) / 4);
     int position = (x + (y*GAME_WIDTH)) % 4;
-    uint8 mask = 3 << position;
+    uint8 mask = 3 << (position * 2);
     *pixel_quad = (*pixel_quad & ~mask) | (color << (position * 2));
 }
 
@@ -362,7 +372,7 @@ void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
     }
 }
 
-void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile)
+void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 shadow = false)
 {
     int screen_x, screen_y;
     if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
@@ -374,26 +384,52 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile)
     {
         return;
     }
-    if (tile.kind == 0)
+    if (shadow)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 0);
     }
-    if (tile.kind == 1)
+    else if (tile.kind == Metal)
     {
-        DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 2);
-        DrawRect(buffer, screen_x, screen_y, 1, 7, 0);
-        DrawRect(buffer, screen_x, screen_y + 7, 7, 1, 0);
-        DrawRect(buffer, screen_x + 1, screen_y, 7, 1, 3);
-        DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 7, 3);
+        DrawRect(buffer, screen_x, screen_y, 8, 8, 2);
+
+        DrawPoint(buffer, screen_x, screen_y + 7, 0);
+        DrawPoint(buffer, screen_x + 7, screen_y, 3);
+        DrawPoint(buffer, screen_x, screen_y, 0);
+        DrawPoint(buffer, screen_x + 7, screen_y + 7, 3);
+
+        if (!tile.connected[0])
+        {
+            DrawRect(buffer, screen_x + 1, screen_y + 7, 6, 1, 0);
+            if (tile.connected[1])
+            {
+                DrawPoint(buffer, screen_x + 7, screen_y + 7, 0);
+            }
+        }
+        if (!tile.connected[1])
+        {
+            DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 6, 3);
+        }
+        if (!tile.connected[2])
+        {
+            DrawRect(buffer, screen_x + 1, screen_y, 6, 1, 3);
+        }
+        if (tile.connected[3])
+        {
+            DrawPoint(buffer, screen_x, screen_y, 3);
+        }
+        else
+        {
+            DrawRect(buffer, screen_x, screen_y + 1, 1, 6, 0);
+        }
     }
-    if (tile.kind == 2)
+    else if (tile.kind == Wood)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 2);
         if (tile.on_fire) {
             DrawRect(buffer, screen_x + 2, screen_y + 2, 4, 4, 1);
         }
     }
-    if (tile.kind == 3)
+    else if (tile.kind == Wood)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 3);
         DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 1);
@@ -402,22 +438,17 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile)
 
 void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, bool32 shadow)
 {
-    int tiles[4][2];
-    int length = GetBlockTiles(tiles, block.rotate, block.kind);
-    TILE tile = {};
-    if (!shadow)
+    TILE_COORD coords[4];
+    GetTileCoordsForBlock(coords, block);
+    for (int i=0; i < block.def->num_tiles; i++)
     {
-        tile.kind = block.kind + 1;
-    }
-    for (int i=0; i < length; i++)
-    {
-        DrawTile(buffer, block.x + tiles[i][0], block.y + tiles[i][1], tile);
+        DrawTile(buffer, coords[i].x, coords[i].y, block.tiles[i], shadow);
     }
 }
 
 void DrawCurrentBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block)
 {
-    DrawBlock(buffer, block, 0);
+    DrawBlock(buffer, block, false);
 }
 
 void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, BOARD *board, GAME_BLOCK block)
@@ -427,7 +458,7 @@ void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, BOARD *board, GAME_BLOCK block)
     if (landing != block.y)
     {
         landing_block.y = landing;
-        DrawBlock(buffer, landing_block, 1);
+        DrawBlock(buffer, landing_block, true);
     }
 }
 
@@ -499,6 +530,7 @@ int8 CheckTileCanFall(BOARD *board, int8* tile_fall_map, int x, int y)
     return *tile_fall;
 }
 
+
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     GAME_STATE *state;
@@ -518,14 +550,41 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->board.width = BOARD_WIDTH;
         state->board.height = BOARD_HEIGHT;
         memory_index used_memory = sizeof(GAME_STATE);
-        InitializeArena(&state->board_arena, Kilobytes(16), (uint8 *) memory->permanent_storage + used_memory);
-        used_memory += Kilobytes(16);
+        InitializeArena(&state->board_arena, Kilobytes(32), (uint8 *) memory->permanent_storage + used_memory);
+        used_memory += Kilobytes(32);
         state->board.tiles = PushArray(&state->board_arena, state->board.width * state->board.height, TILE);
+
+        InitializeArena(&state->def_arena, Kilobytes(1), (uint8 *) memory->permanent_storage + used_memory);
+        {
+            state->block.tiles = PushArray(&state->def_arena, 4, TILE);
+            state->block_defs = PushArray(&state->def_arena, 1, BLOCK_DEF);
+            {
+                int def_count = 0;
+                {
+                    BLOCK_DEF *block = &state->block_defs[def_count++];
+                    block->tile_kind = Metal;
+                    block->offsets[0].x =  0; block->offsets[0].y =  0;
+                    block->offsets[1].x =  1; block->offsets[1].y =  0;
+                    block->offsets[2].x =  0; block->offsets[2].y = -1;
+                    block->offsets[3].x = -1; block->offsets[3].y =  0;
+                    block->num_tiles = 4;
+                }
+                {
+                    BLOCK_DEF *block = &state->block_defs[def_count++];
+                    block->tile_kind = Wood;
+                    block->offsets[0].x =  0; block->offsets[0].y =  0;
+                    block->offsets[1].x =  1; block->offsets[1].y =  0;
+                    block->offsets[2].x =  1; block->offsets[2].y = -1;
+                    block->offsets[3].x = -1; block->offsets[3].y =  0;
+                    block->num_tiles = 4;
+                }
+            }
+        }
 
         buffer->pixels = &state->pixels;
         buffer->pitch = 2 * GAME_WIDTH / 8;
         memory->is_initialized = true;
-        ResetPosition(&state->block, GetRandomKind(&state->random_index));
+        Block_GetNext(&state->block, state->block_defs, &state->random_number_index);
         state->safety = 0;
         state->clock.bpm = 120.0f;
         state->clock.meter = 4;
@@ -605,7 +664,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (Keypress(&keyboard->drop))
         {
             int block_landing = GetBlockLanding(&state->board, state->block);
-            DropBlock(&state->board, &state->block, GetRandomKind(&state->random_index));
+            DropBlock(&state->board, &state->block, state->block_defs, &state->random_number_index);
         }
         if (Keypress(&keyboard->clear_board))
         {
@@ -613,6 +672,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
 
+#if 0
     // BLOCK FALLS
     {
         while (beats--)
@@ -628,13 +688,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
-                PlaceBlock(&state->board, &state->block, GetRandomKind(&state->random_index));
+                PlaceBlock(&state->board, &state->block, state->block_defs, &state->random_number_index);
             }
         }
     }
+#endif
 
-
-
+#if 0
     state->timer += ticks;
     int cycles = state->timer / 1000;
     state->timer %= 1000;
@@ -691,6 +751,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
     }
+#endif
 
     // GRAVITY
     {
