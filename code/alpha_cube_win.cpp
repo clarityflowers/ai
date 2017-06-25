@@ -500,7 +500,7 @@ WinMain(
                 delta_time = current_frame_time - render_buffer.last_frame_time;
                 // {
                 //     char text[256];
-                //     snprintf(text, sizeof(text), "current_frame_time: %d\n   last_frame_time: %d\n        delta_time: %d\n", current_frame_time, render_buffer.last_frame_time, delta_time);
+                //     snprintf(text, sizeof(text), " delta_time: %d\n", delta_time);
                 //     OutputDebugStringA(text);
                 // }
                 if (delta_time < SCREEN_TICKS_PER_FRAME)
@@ -510,11 +510,11 @@ WinMain(
                     current_frame_time = SDL_GetTicks();
                     delta_time = current_frame_time - render_buffer.last_frame_time;
                 }
-                {
-                    // char text[256];
-                    // snprintf(text, sizeof(text), "       time_waited: %d\n",time_to_wait);
-                    // OutputDebugStringA(text);
-                }
+                // {
+                //     char text[256];
+                //     snprintf(text, sizeof(text), "time_waited: %d\n",time_to_wait);
+                //     OutputDebugStringA(text);
+                // }
                 SDL_RenderPresent(render_buffer.renderer);
                 render_buffer.last_frame_time = SDL_GetTicks();
             }
