@@ -34,7 +34,7 @@ void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
     }
 }
 
-void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 shadow = false)
+void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 connections[4], bool32 shadow = false)
 {
     int screen_x, screen_y;
     if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
@@ -59,23 +59,23 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 shadow =
         DrawPoint(buffer, screen_x, screen_y, 0);
         DrawPoint(buffer, screen_x + 7, screen_y + 7, 3);
 
-        if (!tile.connected[0])
+        if (!connections[0])
         {
             DrawRect(buffer, screen_x + 1, screen_y + 7, 6, 1, 0);
-            if (tile.connected[1])
+            if (connections[1])
             {
                 DrawPoint(buffer, screen_x + 7, screen_y + 7, 0);
             }
         }
-        if (!tile.connected[1])
+        if (!connections[1])
         {
             DrawRect(buffer, screen_x + 7, screen_y + 1, 1, 6, 3);
         }
-        if (!tile.connected[2])
+        if (!connections[2])
         {
             DrawRect(buffer, screen_x + 1, screen_y, 6, 1, 3);
         }
-        if (tile.connected[3])
+        if (connections[3])
         {
             DrawPoint(buffer, screen_x, screen_y, 3);
         }
@@ -87,11 +87,28 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 shadow =
     else if (tile.kind == Wood)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 2);
+        DrawRect(buffer, screen_x + 2, screen_y + 2, 4, 4, 3);
+        if (connections[0])
+        {
+            DrawRect(buffer, screen_x + 2, screen_y + 6, 4, 2, 3);
+        }
+        if (connections[1])
+        {
+            DrawRect(buffer, screen_x + 6, screen_y + 2, 2, 4, 3);
+        }
+        if (connections[2])
+        {
+            DrawRect(buffer, screen_x + 2, screen_y, 4, 2, 3);
+        }
+        if (connections[3])
+        {
+            DrawRect(buffer, screen_x, screen_y + 2, 2, 4, 3);
+        }
         if (tile.on_fire) {
             DrawRect(buffer, screen_x + 2, screen_y + 2, 4, 4, 1);
         }
     }
-    else if (tile.kind == Wood)
+    else if (tile.kind == Fire)
     {
         DrawRect(buffer, screen_x, screen_y, 8, 8, 3);
         DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 1);
@@ -104,7 +121,30 @@ void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, bool32 shadow = false
     GetTileCoordsForBlock(coords, block);
     for (int i=0; i < block.def->num_tiles; i++)
     {
-        DrawTile(buffer, coords[i].x, coords[i].y, block.tiles[i], shadow);
+        bool32 connections[4] = {};
+        for (int j=0; j < block.def->num_tiles; j++)
+        {
+            if (i != j)
+            {
+                if (coords[i].x == coords[j].x && coords[i].y + 1 == coords[j].y)
+                {
+                    connections[0] = true;
+                }
+                if (coords[i].x + 1 == coords[j].x && coords[i].y == coords[j].y)
+                {
+                    connections[1] = true;
+                }
+                if (coords[i].x == coords[j].x && coords[i].y - 1 == coords[j].y)
+                {
+                    connections[2] = true;
+                }
+                if (coords[i].x -1 == coords[j].x && coords[i].y == coords[j].y)
+                {
+                    connections[3] = true;
+                }
+            }
+        }
+        DrawTile(buffer, coords[i].x, coords[i].y, block.tiles[i], connections, shadow);
     }
 }
 

@@ -2,11 +2,15 @@ void Board_GetNextBlock(BOARD* board, BLOCK_DEF* defs, int *random_number_index)
 {
     GAME_BLOCK *block = &board->block;
     board->block_count++;
-    int def = 0;
-    // if (*random_number_index % 2 == 1)
-    // {
-    //     def = 1;
-    // }
+    int def = 1;
+    if (*random_number_index == 13)
+    {
+        def = 2;
+    }
+    else if (*random_number_index % 2 == 1)
+    {
+        def = 0;
+    }
     *random_number_index += 1;
     block->def = &defs[def];
     block->y = 18;
@@ -16,8 +20,8 @@ void Board_GetNextBlock(BOARD* board, BLOCK_DEF* defs, int *random_number_index)
     for (int i=0; i < block->def->num_tiles; i++)
     {
         block->tiles[i].kind = block->def->tile_kind;
-        block->tiles[i].on_fire = false;
-        block->tiles[i].health = false;
+        block->tiles[i].on_fire = block->tiles[i].kind == Fire;
+        block->tiles[i].health = 4;
         block->tiles[i].block = board->block_count;
         TILE_OFFSET offset = block->def->offsets[i];
         for (int c = 0; c < 4; c++)

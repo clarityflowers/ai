@@ -149,7 +149,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     block->tile_kind = Metal;
                     block->offsets[0].x =  0; block->offsets[0].y =  0;
                     block->offsets[1].x =  1; block->offsets[1].y =  0;
-                    block->offsets[2].x =  0; block->offsets[2].y = -1;
+                    block->offsets[2].x =  1; block->offsets[2].y = -1;
                     block->offsets[3].x = -1; block->offsets[3].y =  0;
                     block->num_tiles = 4;
                 }
@@ -158,9 +158,15 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     block->tile_kind = Wood;
                     block->offsets[0].x =  0; block->offsets[0].y =  0;
                     block->offsets[1].x =  1; block->offsets[1].y =  0;
-                    block->offsets[2].x =  1; block->offsets[2].y = -1;
+                    block->offsets[2].x =  0; block->offsets[2].y = -1;
                     block->offsets[3].x = -1; block->offsets[3].y =  0;
                     block->num_tiles = 4;
+                }
+                {
+                    BLOCK_DEF *block = &state->block_defs[def_count++];
+                    block->tile_kind = Fire;
+                    block->offsets[0].x =  0; block->offsets[0].y =  0;
+                    block->num_tiles = 1;
                 }
             }
         }
@@ -262,6 +268,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 state->board.block.tiles[i].block = 0;
             }
+            state->random_number_index = 0;
+            Board_GetNextBlock(&state->board, state->block_defs, &state->random_number_index);
         }
     }
 
@@ -287,7 +295,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
 #endif
 
-#if 0
+#if 1
     state->timer += ticks;
     int cycles = state->timer / 1000;
     state->timer %= 1000;
@@ -303,8 +311,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     TILE tile = Board_GetTile(board, x, y);
                     if (tile.on_fire)
                     {
-                        tile.damage++;
-                        if (tile.damage > 3) Board_ClearTile(board, x, y);
+                        tile.health--;
+                        if (tile.health == 0) Board_ClearTile(board, x, y);
                         else Board_SetTile(board, x, y, tile);
                     }
                 }
@@ -320,7 +328,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 for (int x = 0; x < board->width; x++)
                 {
                     TILE tile = Board_GetTile(board, x, y);
-                    if (tile.kind == 2 && !tile.on_fire)
+                    if (tile.kind == Wood && !tile.on_fire)
                     {
                         if (Board_GetTile(board, x, y + 1).on_fire ||
                         Board_GetTile(board, x + 1, y).on_fire ||
@@ -452,20 +460,26 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // DRAW
     {
+        BOARD *board = &state->board;
         DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 1);
         DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
 
-        DrawBlockLanding(buffer, &state->board);
-        DrawBlock(buffer, state->board.block);
+        DrawBlockLanding(buffer, board);
+        DrawBlock(buffer, board->block);
         {
-            for (int row=0; row < BOARD_HEIGHT; row++)
+            for (int y=0; y < BOARD_HEIGHT; y++)
             {
-                for (int col=0; col < BOARD_WIDTH; col++)
+                for (int x=0; x < BOARD_WIDTH; x++)
                 {
-                    TILE tile = Board_GetTile(&state->board, col, row);
+                    bool32 connections[4];
+                    TILE tile = Board_GetTile(board, x, y);
+                    connections[0] = Board_GetTile(board, x, y + 1).block == tile.block;
+                    connections[1] = Board_GetTile(board, x + 1, y).block == tile.block;
+                    connections[2] = Board_GetTile(board, x, y - 1).block == tile.block;
+                    connections[3] = Board_GetTile(board, x - 1, y).block == tile.block;
                     if (tile.kind)
                     {
-                        DrawTile(buffer, col, row, tile);
+                        DrawTile(buffer, x, y, tile, connections);
                     }
                 }
             }

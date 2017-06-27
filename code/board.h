@@ -1,6 +1,6 @@
 #if !defined(BOARD_H)
 
-enum TileKind { Air, Metal, Wood };
+enum TileKind { Air, Metal, Wood, Fire };
 
 struct TILE_OFFSET
 {
