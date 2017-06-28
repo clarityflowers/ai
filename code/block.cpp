@@ -1,60 +1,3 @@
-void Board_GetNextBlock(BOARD* board, BLOCK_DEF* defs, int *random_number_index)
-{
-    GAME_BLOCK *block = &board->block;
-    board->block_count++;
-    int def = 1;
-    if (*random_number_index == 13)
-    {
-        def = 2;
-    }
-    else if (*random_number_index % 2 == 1)
-    {
-        def = 0;
-    }
-    *random_number_index += 1;
-    block->def = &defs[def];
-    block->y = 18;
-    block->x = 16;
-    block->rotate = 0;
-    block->kind = 0;
-    for (int i=0; i < block->def->num_tiles; i++)
-    {
-        block->tiles[i].kind = block->def->tile_kind;
-        block->tiles[i].on_fire = block->tiles[i].kind == Fire;
-        block->tiles[i].health = 4;
-        block->tiles[i].block = board->block_count;
-        TILE_OFFSET offset = block->def->offsets[i];
-        for (int c = 0; c < 4; c++)
-        {
-            block->tiles[i].connected[c] = false;
-        }
-        for (int j=0; j < block->def->num_tiles; j++)
-        {
-            if (j != i)
-            {
-                TILE_OFFSET other = block->def->offsets[j];
-                if (other.x == offset.x && other.y == offset.y + 1)
-                {
-                    block->tiles[i].connected[0] = true;
-                }
-                if (other.y == offset.y && other.x == offset.x + 1)
-                {
-                    block->tiles[i].connected[1] = true;
-                }
-                if (other.x == offset.x && other.y == offset.y - 1)
-                {
-                    block->tiles[i].connected[2] = true;
-                }
-                if (other.y == offset.y && other.x == offset.x - 1)
-                {
-                    block->tiles[i].connected[3] = true;
-                }
-            }
-        }
-    }
-}
-
-
 void GetTileCoordsForBlock(TILE_COORD coords[4], GAME_BLOCK block)
 {
     TILE_OFFSET offsets[4];
@@ -87,23 +30,6 @@ int GetBlockLanding(BOARD *board)
     END:
     int result = block.y - step_down;
     return result;
-}
-
-
-void Board_PlaceBlock(BOARD *board)
-{
-    TILE_COORD coords[4];
-    GetTileCoordsForBlock(coords, board->block);
-    for (int i=0; i < board->block.def->num_tiles; i++)
-    {
-        Board_SetTile(board, coords[i].x, coords[i].y, board->block.tiles[i]);
-    }
-}
-
-void Board_PlaceBlockAndGetNext(BOARD *board, BLOCK_DEF *defs, int *random_number_index)
-{
-    Board_PlaceBlock(board);
-    Board_GetNextBlock(board, defs, random_number_index);
 }
 
 

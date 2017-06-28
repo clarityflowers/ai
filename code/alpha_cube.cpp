@@ -118,7 +118,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     GAME_STATE *state;
     PIXEL_BACKBUFFER *buffer;
-    void* pixels;
     uint64 timer;
     int palette = 0;
 
@@ -127,16 +126,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     state = (GAME_STATE*) memory->permanent_storage;
     buffer = &(state->buffer);
 
+    bool32 reset = false;
+    bool32 place_block = false;
 
     if (!memory->is_initialized)
     {
         state->board.width = BOARD_WIDTH;
         state->board.height = BOARD_HEIGHT;
-        state->board.block_count = 0;
         memory_index used_memory = sizeof(GAME_STATE);
         InitializeArena(&state->board_arena, Kilobytes(32), (uint8 *) memory->permanent_storage + used_memory);
         used_memory += Kilobytes(32);
         state->board.tiles = PushArray(&state->board_arena, state->board.width * state->board.height, TILE);
+
 
         InitializeArena(&state->def_arena, Kilobytes(1), (uint8 *) memory->permanent_storage + used_memory);
         {
@@ -168,13 +169,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     block->offsets[0].x =  0; block->offsets[0].y =  0;
                     block->num_tiles = 1;
                 }
+                {
+                    BLOCK_DEF *block = &state->block_defs[def_count++];
+                    block->tile_kind = Seed;
+                    block->offsets[0].x =  0; block->offsets[0].y =  0;
+                    block->num_tiles = 1;
+                }
             }
         }
 
         buffer->pixels = &state->pixels;
         buffer->pitch = 2 * GAME_WIDTH / 8;
         memory->is_initialized = true;
-        Board_GetNextBlock(&state->board, state->block_defs, &state->random_number_index);
         state->safety = 0;
         state->clock.bpm = 120.0f;
         state->clock.meter = 4;
@@ -182,14 +188,15 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->instrument.Play = Instrument;
         InitColors(state);
         state->gravity = true;
+
+        state->get_next_block = true;
+        reset = true;
     }
 
     int new_beats = state->clock.time.beats;
     int beats = max(new_beats - state->beats, 0);
     state->beats = new_beats;
 
-
-    pixels = buffer->pixels;
 
     // RESOLVE INPUT
     {
@@ -258,22 +265,94 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             int block_landing = GetBlockLanding(board);
 
             board->block.y = GetBlockLanding(board);
-            Board_PlaceBlockAndGetNext(board, state->block_defs, &state->random_number_index);
-            // state->gravity = !state->gravity;
+            place_block = true;
         }
         if (Keydown(&keyboard->clear_board))
         {
-            Board_Reset(&state->board);
-            for (int i=0; i < state->board.block.def->num_tiles; i++)
-            {
-                state->board.block.tiles[i].block = 0;
-            }
-            state->random_number_index = 0;
-            Board_GetNextBlock(&state->board, state->block_defs, &state->random_number_index);
+            reset = true;
         }
     }
 
-#if 1
+    // RESET
+    if (reset)
+    {
+        BOARD* board = &state->board;
+
+        memset(board->tiles, 0, sizeof(TILE) * board->width * board->height);
+        board->block_count = 1;
+
+        state->random_number_index = 0;
+        state->get_next_block = true;
+    }
+
+    // GET NEXT BLOCK
+    if (state->get_next_block)
+    {
+        state->get_next_block = false;
+
+        BOARD* board = &state->board;
+        GAME_BLOCK *block = &board->block;
+        int* random_number_index = &state->random_number_index;
+        BLOCK_DEF* defs = state->block_defs;
+
+        board->block_count++;
+        int def = 1;
+        if (*random_number_index > 0 && *random_number_index % 13 == 0)
+        {
+            def = 2;
+        }
+        else if (*random_number_index % 8 == 0)
+        {
+            def = 3;
+        }
+        else if (*random_number_index % 2 == 1)
+        {
+            def = 0;
+        }
+        *random_number_index += 1;
+        block->def = &defs[def];
+        block->y = 18;
+        block->x = 16;
+        block->rotate = 0;
+        block->kind = 0;
+        for (int i=0; i < block->def->num_tiles; i++)
+        {
+            block->tiles[i].kind = block->def->tile_kind;
+            block->tiles[i].on_fire = block->tiles[i].kind == Fire;
+            block->tiles[i].health = 4;
+            block->tiles[i].block = board->block_count;
+            TILE_OFFSET offset = block->def->offsets[i];
+            for (int c = 0; c < 4; c++)
+            {
+                block->tiles[i].connected[c] = false;
+            }
+            for (int j=0; j < block->def->num_tiles; j++)
+            {
+                if (j != i)
+                {
+                    TILE_OFFSET other = block->def->offsets[j];
+                    if (other.x == offset.x && other.y == offset.y + 1)
+                    {
+                        block->tiles[i].connected[0] = true;
+                    }
+                    if (other.y == offset.y && other.x == offset.x + 1)
+                    {
+                        block->tiles[i].connected[1] = true;
+                    }
+                    if (other.x == offset.x && other.y == offset.y - 1)
+                    {
+                        block->tiles[i].connected[2] = true;
+                    }
+                    if (other.y == offset.y && other.x == offset.x - 1)
+                    {
+                        block->tiles[i].connected[3] = true;
+                    }
+                }
+            }
+        }
+    }
+
+#if 0
     // BLOCK FALLS
     {
         while (beats--)
@@ -289,11 +368,24 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
-                Board_PlaceBlockAndGetNext(&state->board, state->block_defs, &state->random_number_index);
+                place_block = true;
             }
         }
     }
 #endif
+
+    if (place_block)
+    {
+        BOARD* board = &state->board;
+
+        TILE_COORD coords[4];
+        GetTileCoordsForBlock(coords, board->block);
+        for (int i=0; i < board->block.def->num_tiles; i++)
+        {
+            Board_SetTile(board, coords[i].x, coords[i].y, board->block.tiles[i]);
+        }
+        state->get_next_block = true;
+    }
 
 #if 1
     state->timer += ticks;
@@ -488,6 +580,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // COPY ONTO BACKBUFFER
     {
+        void* pixels = buffer->pixels;
         uint8* pixel_row;
         float horizontal_factor, vertical_factor;
         int left, right, top, bottom, scale_factor;

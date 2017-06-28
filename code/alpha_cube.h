@@ -79,6 +79,7 @@ struct GAME_STATE
     float32 audio_buffer[1024];
     int random_number_index;
     bool32 gravity;
+    bool32 get_next_block;
 };
 
 #define ALPHA_CUBE_H

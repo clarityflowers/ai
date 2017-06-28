@@ -113,6 +113,14 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 connecti
         DrawRect(buffer, screen_x, screen_y, 8, 8, 3);
         DrawRect(buffer, screen_x + 1, screen_y + 1, 6, 6, 1);
     }
+    else if (tile.kind == Seed)
+    {
+        DrawRect(buffer, screen_x, screen_y, 8, 8, 2);
+    }
+    else if (tile.kind == Vine)
+    {
+        DrawRect(buffer, screen_x, screen_y, 8, 8, 3);
+    }
 }
 
 void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, bool32 shadow = false)
