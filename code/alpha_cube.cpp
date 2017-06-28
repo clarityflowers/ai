@@ -116,21 +116,21 @@ GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
 
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
-    GAME_STATE *state;
-    PIXEL_BACKBUFFER *buffer;
-    uint64 timer;
     int palette = 0;
 
-    timer = StartProfiler();
+    uint64 timer = StartProfiler();
+
     Assert(sizeof(GAME_STATE) <= memory->permanent_storage_size);
-    state = (GAME_STATE*) memory->permanent_storage;
-    buffer = &(state->buffer);
+    GAME_STATE *state = (GAME_STATE*) memory->permanent_storage;
 
     bool32 reset = false;
     bool32 place_block = false;
 
+    // INITIALIZE
     if (!memory->is_initialized)
     {
+        PIXEL_BACKBUFFER *buffer = &(state->buffer);
+
         state->board.width = BOARD_WIDTH;
         state->board.height = BOARD_HEIGHT;
         memory_index used_memory = sizeof(GAME_STATE);
@@ -189,14 +189,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         InitColors(state);
         state->gravity = true;
 
-        state->get_next_block = true;
         reset = true;
     }
-
-    int new_beats = state->clock.time.beats;
-    int beats = max(new_beats - state->beats, 0);
-    state->beats = new_beats;
-
 
     // RESOLVE INPUT
     {
@@ -289,6 +283,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     if (state->get_next_block)
     {
         state->get_next_block = false;
+        state->safety = 1;
 
         BOARD* board = &state->board;
         GAME_BLOCK *block = &board->block;
@@ -352,19 +347,23 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
 
-#if 0
     // BLOCK FALLS
+#if 1
     {
+        int new_beats = state->clock.time.beats;
+        int beats = max(new_beats - state->beats, 0);
+        state->beats = new_beats;
+
         while (beats--)
         {
             // state->clock.bpm += 1;
-            if (state->board.block.y > 0 && state->board.block.y != GetBlockLanding(&state->board))
-            {
-                state->board.block.y--;
-            }
-            else if (state->safety)
+            if (state->safety)
             {
                 state->safety--;
+            }
+            else if (state->board.block.y > 0 && state->board.block.y != GetBlockLanding(&state->board))
+            {
+                state->board.block.y--;
             }
             else
             {
@@ -387,6 +386,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->get_next_block = true;
     }
 
+    // FIRE
 #if 1
     state->timer += ticks;
     int cycles = state->timer / 1000;
@@ -552,7 +552,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // DRAW
     {
+        PIXEL_BACKBUFFER *buffer = &state->buffer;
         BOARD *board = &state->board;
+
         DrawRect(buffer, 0, 0, GAME_WIDTH, GAME_HEIGHT, 1);
         DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
 
@@ -580,7 +582,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // COPY ONTO BACKBUFFER
     {
+        PIXEL_BACKBUFFER *buffer = &state->buffer;
         void* pixels = buffer->pixels;
+
         uint8* pixel_row;
         float horizontal_factor, vertical_factor;
         int left, right, top, bottom, scale_factor;
