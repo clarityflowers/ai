@@ -224,14 +224,14 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (Keydown(&keyboard->rotate_clockwise))
         {
             if (BlockTryRotate(&state->board, 1)
-                || BlockTryMove(&state->board,  1,  0, 1)
-                || BlockTryMove(&state->board,  0,  1, 1)
-                || BlockTryMove(&state->board,  2,  0, 1)
-                || BlockTryMove(&state->board,  0,  2, 1)
-                || BlockTryMove(&state->board, -1,  0, 1)
-                || BlockTryMove(&state->board,  0, -1, 1)
-                || BlockTryMove(&state->board, -2,  0, 1)
-                || BlockTryMove(&state->board,  0, -2, 1)
+                || BlockTryMove(&state->board, { 1,  0}, 1)
+                || BlockTryMove(&state->board, { 0,  1}, 1)
+                || BlockTryMove(&state->board, { 2,  0}, 1)
+                || BlockTryMove(&state->board, { 0,  2}, 1)
+                || BlockTryMove(&state->board, {-1,  0}, 1)
+                || BlockTryMove(&state->board, { 0, -1}, 1)
+                || BlockTryMove(&state->board, {-2,  0}, 1)
+                || BlockTryMove(&state->board, { 0, -2}, 1)
             )
             {
                 state->safety = 2;
@@ -240,14 +240,14 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (Keydown(&keyboard->rotate_counterclockwise))
         {
             if (BlockTryRotate(&state->board, -1)
-                || BlockTryMove(&state->board, -1,  0, -1)
-                || BlockTryMove(&state->board,  0,  1, -1)
-                || BlockTryMove(&state->board, -2,  0, -1)
-                || BlockTryMove(&state->board,  0,  2, -1)
-                || BlockTryMove(&state->board,  1,  0, -1)
-                || BlockTryMove(&state->board,  0, -1, -1)
-                || BlockTryMove(&state->board,  2,  0, -1)
-                || BlockTryMove(&state->board,  0, -2, -1)
+                || BlockTryMove(&state->board, {-1,  0}, -1)
+                || BlockTryMove(&state->board, { 0,  1}, -1)
+                || BlockTryMove(&state->board, {-2,  0}, -1)
+                || BlockTryMove(&state->board, { 0,  2}, -1)
+                || BlockTryMove(&state->board, { 1,  0}, -1)
+                || BlockTryMove(&state->board, { 0, -1}, -1)
+                || BlockTryMove(&state->board, { 2,  0}, -1)
+                || BlockTryMove(&state->board, { 0, -2}, -1)
             )
             {
                 state->safety = 2;
@@ -258,7 +258,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             BOARD *board = &state->board;
             int block_landing = GetBlockLanding(board);
 
-            board->block.y = GetBlockLanding(board);
+            board->block.pos.y = GetBlockLanding(board);
             place_block = true;
         }
         if (Keydown(&keyboard->clear_board))
@@ -296,18 +296,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             def = 2;
         }
-        else if (*random_number_index % 8 == 0)
-        {
-            def = 3;
-        }
+        // else if (*random_number_index % 8 == 0)
+        // {
+        //     def = 3;
+        // }
         else if (*random_number_index % 2 == 1)
         {
-            def = 0;
+            def = 2;
         }
         *random_number_index += 1;
         block->def = &defs[def];
-        block->y = 18;
-        block->x = 16;
+        block->pos.y = 18;
+        block->pos.x = 16;
         block->rotate = 0;
         block->kind = 0;
         for (int i=0; i < block->def->num_tiles; i++)
@@ -317,33 +317,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             block->tiles[i].health = 4;
             block->tiles[i].block = board->block_count;
             TILE_OFFSET offset = block->def->offsets[i];
-            for (int c = 0; c < 4; c++)
-            {
-                block->tiles[i].connected[c] = false;
-            }
-            for (int j=0; j < block->def->num_tiles; j++)
-            {
-                if (j != i)
-                {
-                    TILE_OFFSET other = block->def->offsets[j];
-                    if (other.x == offset.x && other.y == offset.y + 1)
-                    {
-                        block->tiles[i].connected[0] = true;
-                    }
-                    if (other.y == offset.y && other.x == offset.x + 1)
-                    {
-                        block->tiles[i].connected[1] = true;
-                    }
-                    if (other.x == offset.x && other.y == offset.y - 1)
-                    {
-                        block->tiles[i].connected[2] = true;
-                    }
-                    if (other.y == offset.y && other.x == offset.x - 1)
-                    {
-                        block->tiles[i].connected[3] = true;
-                    }
-                }
-            }
         }
     }
 
@@ -361,9 +334,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 state->safety--;
             }
-            else if (state->board.block.y > 0 && state->board.block.y != GetBlockLanding(&state->board))
+            else if (state->board.block.pos.y > 0 && state->board.block.pos.y != GetBlockLanding(&state->board))
             {
-                state->board.block.y--;
+                state->board.block.pos.y--;
             }
             else
             {
@@ -378,10 +351,10 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         BOARD* board = &state->board;
 
         TILE_COORD coords[4];
-        GetTileCoordsForBlock(coords, board->block);
+        GetTileTILE_COORDsForBlock(coords, board->block);
         for (int i=0; i < board->block.def->num_tiles; i++)
         {
-            Board_SetTile(board, coords[i].x, coords[i].y, board->block.tiles[i]);
+            Board_SetTile(board, coords[i], board->block.tiles[i]);
         }
         state->get_next_block = true;
     }
@@ -400,12 +373,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 for (int x=0; x < board->width; x++)
                 {
-                    TILE tile = Board_GetTile(board, x, y);
+                    TILE_COORD coord = {x, y};
+                    TILE tile = Board_GetTile(board, coord);
                     if (tile.on_fire)
                     {
                         tile.health--;
-                        if (tile.health == 0) Board_ClearTile(board, x, y);
-                        else Board_SetTile(board, x, y, tile);
+                        if (tile.health == 0) Board_ClearTile(board, coord);
+                        else Board_SetTile(board, coord, tile);
                     }
                 }
             }
@@ -419,16 +393,17 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 for (int x = 0; x < board->width; x++)
                 {
-                    TILE tile = Board_GetTile(board, x, y);
+                    TILE_COORD coord = {x, y};
+                    TILE tile = Board_GetTile(board, coord);
                     if (tile.kind == Wood && !tile.on_fire)
                     {
-                        if (Board_GetTile(board, x, y + 1).on_fire ||
-                        Board_GetTile(board, x + 1, y).on_fire ||
-                        Board_GetTile(board, x, y - 1).on_fire ||
-                        Board_GetTile(board, x - 1, y).on_fire)
+                        if (Board_GetTile(board, {x, y + 1}).on_fire ||
+                            Board_GetTile(board, {x + 1, y}).on_fire ||
+                            Board_GetTile(board, {x, y - 1}).on_fire ||
+                            Board_GetTile(board, {x - 1, y}).on_fire)
                         {
-                            TILE_COORD *coord = PushStruct(&state->board_arena, TILE_COORD);
-                            coord->x = x; coord->y = y;
+                            TILE_COORD *tile_coord = PushStruct(&state->board_arena, TILE_COORD);
+                            tile_coord->x = x; tile_coord->y = y;
                             to_burn_count++;
                         }
                     }
@@ -436,10 +411,10 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             while (to_burn_count > 0)
             {
-                TILE_COORD *coord = PopStruct(&state->board_arena, TILE_COORD);
-                TILE tile = Board_GetTile(board, coord->x, coord->y);
+                TILE_COORD coord = PopStruct(&state->board_arena, TILE_COORD);
+                TILE tile = Board_GetTile(board, coord);
                 tile.on_fire = true;
-                Board_SetTile(board, coord->x, coord->y, tile);
+                Board_SetTile(board, coord, tile);
                 to_burn_count--;
             }
         }
@@ -464,20 +439,28 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 for (int x=0; x < board->width; x++)
                 {
-                    TILE tile = Board_GetTile(board, x, y);
+                    TILE_COORD coord = {x, y};
+                    TILE tile = Board_GetTile(board, coord);
                     if (tile.kind)
                     {
-                        if (y == 0)
+                        int to = tile.block;
+                        int from = 0;
+                        bool32 insert = false;
+                        if (coord.y == 0)
                         {
-                            BlockGraph_InsertEdge(&graph, arena, tile.block, 0);
+                            insert = true;
                         }
                         else
                         {
-                            TILE below = Board_GetTile(board, x, y - 1);
+                            TILE below = Board_GetTile(board, {x, y - 1});
                             if (below.kind && below.block != tile.block)
                             {
-                                BlockGraph_InsertEdge(&graph, arena, tile.block, below.block);
+                                insert = true;
                             }
+                        }
+                        if (insert)
+                        {
+                            BlockGraph_InsertEdge(&graph, arena, tile.block, 0);
                         }
                     }
                 }
@@ -535,12 +518,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 for (int x = 0; x < board->width; x++)
                 {
-                    TILE tile = Board_GetTile(board, x, y);
+                    TILE_COORD coord = {x, y};
+                    TILE tile = Board_GetTile(board, coord);
                     if (tile.kind && !graph.nodes[tile.block].discovered)
                     {
-                        TILE tile = Board_GetTile(board, x, y);
-                        Board_ClearTile(board, x, y);
-                        Board_SetTile(board, x, y - 1, tile);
+                        TILE tile = Board_GetTile(board, coord);
+                        Board_ClearTile(board, coord);
+                        Board_SetTile(board, {x, y - 1}, tile);
                     }
                 }
             }
@@ -565,15 +549,16 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 for (int x=0; x < BOARD_WIDTH; x++)
                 {
+                    TILE_COORD coord = {x, y};
                     bool32 connections[4];
-                    TILE tile = Board_GetTile(board, x, y);
-                    connections[0] = Board_GetTile(board, x, y + 1).block == tile.block;
-                    connections[1] = Board_GetTile(board, x + 1, y).block == tile.block;
-                    connections[2] = Board_GetTile(board, x, y - 1).block == tile.block;
-                    connections[3] = Board_GetTile(board, x - 1, y).block == tile.block;
+                    TILE tile = Board_GetTile(board, coord);
+                    connections[0] = Board_GetTile(board, {x, y + 1}).block == tile.block;
+                    connections[1] = Board_GetTile(board, {x + 1, y}).block == tile.block;
+                    connections[2] = Board_GetTile(board, {x, y - 1}).block == tile.block;
+                    connections[3] = Board_GetTile(board, {x - 1, y}).block == tile.block;
                     if (tile.kind)
                     {
-                        DrawTile(buffer, x, y, tile, connections);
+                        DrawTile(buffer, coord, tile, connections);
                     }
                 }
             }

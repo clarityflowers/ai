@@ -2,29 +2,30 @@
 //**************************** TILES *******************************************
 //******************************************************************************
 
-TILE Board_GetTile(BOARD *board, int x, int y)
+TILE Board_GetTile(BOARD *board, TILE_COORD coord)
 {
     TILE result = {};
-    if (x >= 0 && x < board->width && y >= 0 && y < board->height)
+    if (coord.x >= 0 && coord.x < board->width && coord.y >= 0 && coord.y < board->height)
     {
-        result = board->tiles[(y * board->width) + x];
+        result = board->tiles[(coord.y * board->width) + coord.x];
     }
     return result;
 }
 
-bool32 Board_TileExists(BOARD *board, int x, int y)
+bool32 Board_TileExists(BOARD *board, TILE_COORD coord)
 {
-    return Board_GetTile(board, x, y).kind > 0;
+    return Board_GetTile(board, coord).kind > 0;
 }
 
-void Board_SetTile(BOARD *board, int x, int y, TILE value)
+void Board_SetTile(BOARD *board, TILE_COORD coord, TILE value)
 {
-    board->tiles[(y * board->width) + x] = value;
+    board->tiles[(coord.y * board->width) + coord.x] = value;
 }
 
-void Board_ClearTile(BOARD *board, int x, int y)
+void Board_ClearTile(BOARD *board, TILE_COORD coord)
 {
-    board->tiles[(y * board->width) + x] = {};
+    TILE tile = {};
+    Board_SetTile(board, coord, tile);
 }
 
 void RotateTileOffsets(TILE_OFFSET out[4], TILE_OFFSET in[4], int count, int amount)

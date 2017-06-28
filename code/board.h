@@ -1,11 +1,27 @@
 #if !defined(BOARD_H)
 
-enum TileKind { Air, Metal, Wood, Fire, Seed, Vine };
+enum TileKind { Air, Metal, Wood, Fire, Seed, Sprout, Vine };
 
 struct TILE_OFFSET
 {
     int8 x, y;
 };
+
+TILE_COORD operator+(TILE_COORD a, TILE_OFFSET b)
+{
+    TILE_COORD result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    return result;
+}
+
+TILE_COORD operator+(TILE_OFFSET a, TILE_COORD b)
+{
+    TILE_COORD result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    return result;
+}
 
 struct BLOCK_DEF
 {
@@ -17,15 +33,16 @@ struct BLOCK_DEF
 struct TILE
 {
     TileKind kind;
-    bool32 on_fire;
-    int health;
+    int32 health;
     uint32 block;
-    bool32 connected[4];
+    int32 growth;
+    bool32 on_fire;
 };
 
 struct GAME_BLOCK
 {
-    int x, y, rotate, kind;
+    TILE_COORD pos;
+    int rotate, kind;
     BLOCK_DEF *def;
     TILE* tiles;
 };

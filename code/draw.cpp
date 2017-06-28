@@ -34,13 +34,13 @@ void DrawRect(PIXEL_BACKBUFFER* buffer, int x, int y, int w, int h, uint8 color)
     }
 }
 
-void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 connections[4], bool32 shadow = false)
+void DrawTile(PIXEL_BACKBUFFER* buffer, TILE_COORD coord, TILE tile, bool32 connections[4], bool32 shadow = false)
 {
     int screen_x, screen_y;
-    if (x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
+    if (coord.x >= 0 && coord.x < BOARD_WIDTH && coord.y >= 0 && coord.y < BOARD_HEIGHT)
     {
-        screen_x = x * 8;
-        screen_y = BOARD_Y + y * 8;
+        screen_x = coord.x * 8;
+        screen_y = BOARD_Y + coord.y * 8;
     }
     else
     {
@@ -126,7 +126,7 @@ void DrawTile(PIXEL_BACKBUFFER* buffer, int x, int y, TILE tile, bool32 connecti
 void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, bool32 shadow = false)
 {
     TILE_COORD coords[4];
-    GetTileCoordsForBlock(coords, block);
+    GetTileTILE_COORDsForBlock(coords, block);
     for (int i=0; i < block.def->num_tiles; i++)
     {
         bool32 connections[4] = {};
@@ -152,7 +152,7 @@ void DrawBlock(PIXEL_BACKBUFFER* buffer, GAME_BLOCK block, bool32 shadow = false
                 }
             }
         }
-        DrawTile(buffer, coords[i].x, coords[i].y, block.tiles[i], connections, shadow);
+        DrawTile(buffer, coords[i], block.tiles[i], connections, shadow);
     }
 }
 
@@ -160,9 +160,9 @@ void DrawBlockLanding(PIXEL_BACKBUFFER* buffer, BOARD *board)
 {
     GAME_BLOCK landing_block = board->block;
     int landing = GetBlockLanding(board);
-    if (landing != board->block.y)
+    if (landing != board->block.pos.y)
     {
-        landing_block.y = landing;
+        landing_block.pos.y = landing;
         DrawBlock(buffer, landing_block, true);
     }
 }

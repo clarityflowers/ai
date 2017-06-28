@@ -1,6 +1,7 @@
 #if !defined(ALPHA_CUBE_H)
 
 #include "platform.h"
+#include "cube_math.h"
 #include "sound.h"
 #include "board.h"
 #include "block_graph.h"
@@ -23,11 +24,6 @@ struct MEMORY_ARENA
     memory_index used;
 };
 
-struct TILE_COORD
-{
-    int x, y;
-};
-
 
 internal void InitializeArena(MEMORY_ARENA *arena, memory_index size, uint8 *base)
 {
@@ -47,8 +43,8 @@ void * PushSize_(MEMORY_ARENA *arena, memory_index size)
     return result;
 }
 
-#define PopStruct(arena, type) (type *)PopSize_(arena, sizeof(type))
-#define PopArray(arena, count, type) (type *)PopSize_(arena, (count)*sizeof(type))
+#define PopStruct(arena, type) *((type *)PopSize_(arena, sizeof(type)))
+#define PopArray(arena, count, type) *((type *)PopSize_(arena, (count)*sizeof(type)))
 void * PopSize_(MEMORY_ARENA *arena, memory_index size)
 {
     Assert((arena->used - size) >= 0);
