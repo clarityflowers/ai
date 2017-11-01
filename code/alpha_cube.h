@@ -4,6 +4,7 @@
 #include "cube_math.h"
 #include "sound.h"
 #include "board.h"
+#include "draw.h"
 #include "block_graph.h"
 
 #define BOARD_WIDTH 32
@@ -54,7 +55,6 @@ void * PopSize_(MEMORY_ARENA *arena, memory_index size)
     return result;
 }
 
-
 struct GAME_STATE
 {
     MEMORY_ARENA def_arena;
@@ -63,6 +63,8 @@ struct GAME_STATE
     RGBA_COLOR palettes[3][4];
     PIXEL_BACKBUFFER buffer;
     uint8 pixels[(2 * GAME_WIDTH * GAME_HEIGHT) / 8];
+    PIXEL_BACKBUFFER spritemap;
+    PIXEL_BACKBUFFER font_spritemap;
     BOARD board;
     int frames;
     int safety;
@@ -76,6 +78,17 @@ struct GAME_STATE
     int random_number_index;
     bool32 gravity;
     bool32 get_next_block;
+
+    int mode;
+    int edit_mode;
+    uint8 cursor_color;
+    uint8 selected_sprites[8];
+    uint8 selected_sprites_count;
+    uint16 edited_sprites[8][8];
+    uint8 current_sprite;
+
+    char editor_text[256];
+    uint8 editor_text_position;
 };
 
 #define ALPHA_CUBE_H

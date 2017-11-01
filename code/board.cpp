@@ -14,7 +14,17 @@ TILE Board_GetTile(BOARD *board, TILE_COORD coord)
 
 bool32 Board_TileExists(BOARD *board, TILE_COORD coord)
 {
-    return Board_GetTile(board, coord).kind > 0;
+    bool32 result;
+    if (coord.x >= 0 && coord.x < board->width && coord.y >= 0 && coord.y < board->height)
+    {
+        TILE tile = board->tiles[(coord.y * board->width) + coord.x];
+        result = (tile.kind > 0);
+    }
+    else
+    {
+        result = 1;
+    }
+    return result;
 }
 
 void Board_SetTile(BOARD *board, TILE_COORD coord, TILE value)

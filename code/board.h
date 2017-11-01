@@ -33,10 +33,11 @@ struct BLOCK_DEF
 struct TILE
 {
     TileKind kind;
-    int32 health;
     uint32 block;
-    int32 growth;
-    bool32 on_fire;
+    uint8 health;
+    bool8 on_fire;
+    
+    uint8 growth;
 };
 
 struct GAME_BLOCK
@@ -55,5 +56,5 @@ struct BOARD
     GAME_BLOCK block;
 };
 
-#define ALPHA_CUBE_H
+#define BOARD_H
 #endif

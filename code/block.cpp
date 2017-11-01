@@ -19,7 +19,7 @@ int GetBlockLanding(BOARD *board)
         for (int i=0; i < block.def->num_tiles; i++)
         {
             TILE_COORD coord = coords[i];
-            coord.y -= step_down - 1;
+            coord.y -= step_down + 1;
             if (Board_TileExists(board, coord))
             {
                 goto END;
