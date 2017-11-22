@@ -1,6 +1,7 @@
 #if !defined(PLATFORM_H)
 
 #include <stdint.h>
+#include "vector.h"
 
 #if ALPHA_CUBE_SLOW
 #define Assert(Expression) \
@@ -44,7 +45,6 @@ typedef struct THREAD_CONTEXT
     int Placeholder;
 } THREAD_CONTEXT;
 
-#if ALPHA_CUBE_INTERNAL
 /* IMPORTANT(casey):
 
    These are NOT for doing anything in the shipping game - they are
@@ -62,7 +62,7 @@ SafeTruncateUInt64(uint64 value)
 
 typedef struct DEBUG_READ_FILE_RESULT
 {
-    uint32 contentsSize;
+    uint32 contents_size;
     void *contents;
 } DEBUG_READ_FILE_RESULT;
 
@@ -75,7 +75,6 @@ typedef DEBUG_PLATFORM_READ_ENTIRE_FILE(debug_platform_read_entire_file);
 #define DEBUG_PLATFORM_WRITE_ENTIRE_FILE(name) bool32 name(THREAD_CONTEXT* thread, char *filename, uint32 memorySize, void *memory)
 typedef DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_platform_write_entire_file);
 
-#endif
 
 struct GAME_MEMORY
 {
@@ -96,7 +95,6 @@ struct GAME_AUDIO
 {
     void *stream;
     uint32 size, depth, samples_per_tick;
-    float64 written;
 };
 
 struct GAME_BUTTON_STATE
@@ -107,69 +105,23 @@ struct GAME_BUTTON_STATE
     int transitions;
 };
 
-struct Coord
-{
-    int x,y;
-};
-
-
-struct TileCoord
-{
-    int x,y;
-};
-
-Coord operator+(Coord a, Coord b)
-{
-    Coord result;
-    result.x = a.x + b.x;
-    result.y = a.y + b.y;
-    return result;
-}
-
-Coord operator-(Coord a, Coord b)
-{
-    Coord result;
-    result.x = a.x - b.x;
-    result.y = a.y - b.y;
-    return result;
-}
-
-Coord ToCoord(TileCoord tile_coord)
-{
-    Coord result = {tile_coord.x * 8, tile_coord.y * 8};
-    return result;
-}
-
-
-struct Rect
-{
-    int x, y, w, h;
-};
-
-struct TileRect
-{
-    int x, y, w, h;
-};
-
 
 struct GAME_CONTROLLER_INPUT
 {
     bool32 is_connected;
-    Coord mouse_position;
 
     union
     {
-        GAME_BUTTON_STATE buttons[9];
+        GAME_BUTTON_STATE buttons[7];
         struct
         {
-            GAME_BUTTON_STATE move_right;
-            GAME_BUTTON_STATE move_left;
-            GAME_BUTTON_STATE rotate_clockwise;
-            GAME_BUTTON_STATE rotate_counterclockwise;
-            GAME_BUTTON_STATE drop;
-            GAME_BUTTON_STATE clear_board;
+            GAME_BUTTON_STATE up;
+            GAME_BUTTON_STATE right;
+            GAME_BUTTON_STATE down;
+            GAME_BUTTON_STATE left;
+            GAME_BUTTON_STATE a;
+            GAME_BUTTON_STATE b;
             GAME_BUTTON_STATE escape;
-            GAME_BUTTON_STATE primary_click;
         };
     };
 };
@@ -180,6 +132,11 @@ struct GAME_INPUT
     int key_buffer[256];
     int key_buffer_length;
     int key_buffer_position;
+
+    int mouse_x;
+    int mouse_y;
+    GAME_BUTTON_STATE primary_click;
+
     GAME_BUTTON_STATE record_gif;
 };
 

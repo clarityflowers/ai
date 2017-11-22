@@ -167,7 +167,7 @@ Win_UnloadGameCode(WIN_GAME_CODE *game_code)
 //**************************** MAIN ********************************************
 //******************************************************************************
 
-DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory)
+DEBUG_PLATFORM_FREE_FILE_MEMORY(DebugWin_FreeFileMemory)
 {
     if(memory)
     {
@@ -221,12 +221,12 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile)
                    (fileSize32 == bytesRead))
                 {
                     // NOTE(casey): File read successfully
-                    result.contentsSize = fileSize32;
+                    result.contents_size = fileSize32;
                 }
                 else
                 {                    
                     // TODO(casey): Logging
-                    DEBUGPlatformFreeFileMemory(thread, result.contents);
+                    DebugWin_FreeFileMemory(thread, result.contents);
                     result.contents = 0;
                 }
             }
@@ -424,12 +424,12 @@ WinMain(
 #if ALPHA_CUBE_INTERNAL
 	base_address = 0;
 #else
-	base_address = Terabytes(2);
+	base_address = (LPVOID)Terabytes(2);
 #endif
 
 	game_memory.permanent_storage_size = Megabytes(6);
     game_memory.transient_storage_size = Megabytes(6);
-    game_memory.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
+    game_memory.DEBUGPlatformFreeFileMemory = DebugWin_FreeFileMemory;
     game_memory.DEBUGPlatformReadEntireFile = DEBUGPlatformReadEntireFile;
     game_memory.DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
 
@@ -454,19 +454,19 @@ WinMain(
     }
 
 
-    if (FileSize("spritemap") == 0)
+    if (FileSize("spritemap.sm") == 0)
     {
         void* memory = malloc(4069);
         memset(memory, 0, 4096);
         THREAD_CONTEXT dummy_thread = {};
-        DEBUGPlatformWriteEntireFile(&dummy_thread, "spritemap", 4096, memory);
+        DEBUGPlatformWriteEntireFile(&dummy_thread, "spritemap.sm", 4096, memory);
     }
-    if (FileSize("font.sm") == 0)
+    if (FileSize("debug_spritemap.sm") == 0)
     {
         void* memory = malloc(4069);
         memset(memory, 0, 4096);
         THREAD_CONTEXT dummy_thread = {};
-        DEBUGPlatformWriteEntireFile(&dummy_thread, "font.sm", 4096, memory);
+        DEBUGPlatformWriteEntireFile(&dummy_thread, "debug_spritemap.sm", 4096, memory);
     }
 
 	game_is_running = true;
@@ -491,13 +491,16 @@ WinMain(
 		new_keyboard = &(new_input->controllers[0]);
 
         *new_keyboard = {};
-        new_keyboard->mouse_position = old_keyboard->mouse_position;
+        new_input->mouse_x = new_input->mouse_x;
+        new_input->mouse_y = new_input->mouse_y;
+        new_input->primary_click.transitions = old_input->primary_click.transitions;
+        new_input->primary_click.is_down = old_input->primary_click.is_down;
 		for (int i=0; i < ArrayCount(new_keyboard->buttons); i++)
 		{
 			new_keyboard->buttons[i].transitions = old_keyboard->buttons[i].transitions;
 			new_keyboard->buttons[i].is_down = old_keyboard->buttons[i].is_down;
         }
-        for (int i=old_input->key_buffer_position; i != old_input->key_buffer_position + old_input->key_buffer_length; i = (i + 1) % 256)
+        for (int i=old_input->key_buffer_position; i != (old_input->key_buffer_position + old_input->key_buffer_length) % 256; i = (i + 1) % 256)
         {
             new_input->key_buffer[i] = old_input->key_buffer[i];
         }
@@ -519,28 +522,22 @@ WinMain(
 					{
 						case SDLK_d:
 						{
-							Win_LogKeyPress(&(new_keyboard->move_right), &event);
+							Win_LogKeyPress(&(new_keyboard->right), &event);
 						} break;
 						case SDLK_a:
 						{
-							Win_LogKeyPress(&(new_keyboard->move_left), &event);
+							Win_LogKeyPress(&(new_keyboard->left), &event);
 						} break;
-						case SDLK_e:
+                        case SDLK_j:
+                        case SDLK_LSHIFT:
 						{
-							Win_LogKeyPress(&(new_keyboard->rotate_clockwise), &event);
-						} break;
-						case SDLK_q:
-						{
-							Win_LogKeyPress(&(new_keyboard->rotate_counterclockwise), &event);
+							Win_LogKeyPress(&(new_keyboard->b), &event);
 						} break;
 						case SDLK_SPACE:
+						case SDLK_k:
 						{
-							Win_LogKeyPress(&(new_keyboard->drop), &event);
+							Win_LogKeyPress(&(new_keyboard->a), &event);
 						} break;
-                        case SDLK_k:
-                        {
-							Win_LogKeyPress(&(new_keyboard->clear_board), &event);
-                        } break;
                         case SDLK_F9:
                         {
                             Win_LogKeyPress(&(new_input->record_gif), &event);
@@ -568,7 +565,7 @@ WinMain(
                     {
                         case SDL_BUTTON_LEFT:
                         {
-                            GAME_BUTTON_STATE* button = &new_keyboard->primary_click;
+                            GAME_BUTTON_STATE* button = &new_input->primary_click;
                             if (button->is_down != (event.button.state))
                             {
                                 button->transitions++;
@@ -584,23 +581,51 @@ WinMain(
 		}
 
         {
-            GAME_BUTTON_STATE *button = &(new_input->record_gif);
-            if (button->transitions >= 1)
+            GAME_CONTROLLER_INPUT *keyboard = &(new_input->controllers[0]);
+            for (int i=0; i < ArrayCount(keyboard->buttons); i++)
             {
-                button->transitions--;
-                button->is_down = !button->is_down;
-                if (button->is_down)
+                GAME_BUTTON_STATE *button = &(keyboard->buttons[i]);
+                button->was_pressed = 0;
+                button->was_released = 0;
+                if (button->transitions > 0)
                 {
-                    recording_gif = !recording_gif;
+                    button->transitions--;
+                    button->is_down = !button->is_down;
+                    if (button->is_down) button->was_pressed = 1;
+                    else button->was_released = 1;
+                }
+            }
+            {
+                GAME_BUTTON_STATE *button = &(new_input->primary_click);
+                button->was_pressed = 0;
+                button->was_released = 0;
+                if (button->transitions > 0)
+                {
+                    button->transitions--;
+                    button->is_down = !button->is_down;
+                    if (button->is_down) button->was_pressed = 1;
+                    else button->was_released = 1;
+                }
+            }
+            {
+                GAME_BUTTON_STATE *button = &(new_input->record_gif);
+                if (button->transitions >= 1)
+                {
+                    button->transitions--;
+                    button->is_down = !button->is_down;
+                    if (button->is_down)
+                    {
+                        recording_gif = !recording_gif;
+                    }
                 }
             }
         }
 
         {
-            Coord pos = {};
-            uint32 buttons = SDL_GetMouseState(&pos.x, &pos.y);
-            pos.y = buffer.h - pos.y;
-            new_keyboard->mouse_position = pos;
+            int x, y;
+            uint32 buttons = SDL_GetMouseState(&x, &y);
+            new_input->mouse_y = buffer.h - y;
+            new_input->mouse_x = x;
         }
 
 		new_dll_write_time = Win_GetLastWriteTime(source_game_code_dll_full_path);

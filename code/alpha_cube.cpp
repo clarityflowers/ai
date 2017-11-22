@@ -12,33 +12,63 @@
 #define BOARD_X 88
 #define BOARD_Y 40
 
+#include "vector.cpp"
 #include "sound.cpp"
 #include "random.h"
-#include "board.cpp"
-#include "block.cpp"
-#include "block_graph.cpp"
 #include "draw.cpp"
 
 #define SPRITEMAP_SIZE 4096
 
-PIXEL_BACKBUFFER DEBUGLoadSpritemap(THREAD_CONTEXT* thread, debug_platform_read_entire_file *readEntireFile, char* filename)
+bool32 DEBUGLoadSpritemap(PixelBuffer* buffer, THREAD_CONTEXT* thread, debug_platform_read_entire_file *read, char* filename)
 {
-    PIXEL_BACKBUFFER result = {};
-    DEBUG_READ_FILE_RESULT readResult = readEntireFile(thread, filename);
-    if(readResult.contentsSize != 0)
+    DEBUG_READ_FILE_RESULT read_result = read(thread, filename);
+    if(read_result.contents_size != 0)
     {
-        result.pixels = readResult.contents;
+        uint8* pixel_quad = (uint8*)read_result.contents;
+        uint8* pixel = buffer->pixels;
+        for (uint32 i=0; (i < (128 * 128) / 4) && (i < read_result.contents_size); i++)
+        {
+            uint8 quad_value = *pixel_quad;
+            for (int j=0; j < 4; j++)
+            {
+                uint8 color = (quad_value >> (3 - j) * 2) & 3;
+                *pixel++ = color; 
+            }
+            pixel_quad++;
+        }
+        buffer->w = 128;
+        buffer->h = 128;
+        buffer->pitch = 128;
+        return 1;
     }
-    result.w = 128;
-    result.h = 128;
-    result.pitch = 2 * result.w / 8;
-    return result;
+    return 0;
 }
 
-bool32 DEBUGSaveSpritemap(THREAD_CONTEXT* thread, debug_platform_write_entire_file* writeEntireFile, PIXEL_BACKBUFFER* spritemap)
+bool32 DEBUGSaveSpritemap(PixelBuffer* spritemap, THREAD_CONTEXT* thread, debug_platform_read_entire_file *read, debug_platform_write_entire_file* write, char* filename)
 {
-    bool32 result = writeEntireFile(thread, "spritemap", spritemap->h * spritemap->pitch, spritemap->pixels);
-    return result;
+    DEBUG_READ_FILE_RESULT read_result = read(thread, filename);
+    if (read_result.contents_size != 0)
+    {
+        uint8* memory = (uint8*)read_result.contents;
+        uint8* quad = memory;
+        uint8* pixel = spritemap->pixels;
+        for (uint32 i=0; (i < (128 * 128) / 4) && (i < read_result.contents_size); i++)
+        {
+            uint8 quad_value = 0x00;
+            for (int j=0; j < 4; j++)
+            {
+                uint8 color = *pixel++;
+                quad_value |= (color & 3) << ((3 - j) * 2);
+            }
+            *quad++ = quad_value;
+        }
+
+        bool32 result = write(thread, filename, read_result.contents_size, memory);
+        return result;
+    }
+
+    return 0;
+
 }
 
 
@@ -86,7 +116,7 @@ void GetPalette(RGBA_COLOR palette[4], int index)
         case 0:
         {
             int j=0;
-            palette[j++] = {0x9C, 0xBD, 0x0F, 0xFF};
+            palette[j++] = {0xb0, 0xc1, 0x75, 0xFF};
             palette[j++] = {0x8C, 0xAD, 0x0F, 0xFF};
             palette[j++] = {0x30, 0x62, 0x30, 0xFF};
             palette[j++] = {0x0F, 0x38, 0x0F, 0xFF};
@@ -137,398 +167,19 @@ GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
     {
         memset(audio->stream, 0, audio->size * audio->depth);
         GetSound(audio, state, ticks);
-        memcpy(state->audio_buffer,audio->stream, 1024 * 4);
     }
 }
 
-void Play(bool32 first, GAME_STATE *state, GAME_INPUT *input, uint32 ticks)
-{
-    bool32 reset = first;
-    bool32 place_block = false;
-
-    // RESOLVE INPUT
-    {
-        GAME_CONTROLLER_INPUT *keyboard = &(input->controllers[0]);
-        if (keyboard->move_right.was_pressed)
-        {
-            if (BlockTryMoveHorizontally(&state->board, &state->board.block, 1))
-            {
-                state->safety = 2;
-            }
-        }
-        if (keyboard->move_left.was_pressed)
-        {
-            if (BlockTryMoveHorizontally(&state->board, &state->board.block, -1))
-            {
-                state->safety = 2;
-            }
-        }
-        if (keyboard->rotate_clockwise.was_pressed)
-        {
-            if (BlockTryRotate(&state->board, 1)
-                || BlockTryMove(&state->board, { 1,  0}, 1)
-                || BlockTryMove(&state->board, { 0,  1}, 1)
-                || BlockTryMove(&state->board, { 2,  0}, 1)
-                || BlockTryMove(&state->board, { 0,  2}, 1)
-                || BlockTryMove(&state->board, {-1,  0}, 1)
-                || BlockTryMove(&state->board, { 0, -1}, 1)
-                || BlockTryMove(&state->board, {-2,  0}, 1)
-                || BlockTryMove(&state->board, { 0, -2}, 1)
-            )
-            {
-                state->safety = 2;
-            }
-        }
-        if (keyboard->rotate_counterclockwise.was_pressed)
-        {
-            if (BlockTryRotate(&state->board, -1)
-                || BlockTryMove(&state->board, {-1,  0}, -1)
-                || BlockTryMove(&state->board, { 0,  1}, -1)
-                || BlockTryMove(&state->board, {-2,  0}, -1)
-                || BlockTryMove(&state->board, { 0,  2}, -1)
-                || BlockTryMove(&state->board, { 1,  0}, -1)
-                || BlockTryMove(&state->board, { 0, -1}, -1)
-                || BlockTryMove(&state->board, { 2,  0}, -1)
-                || BlockTryMove(&state->board, { 0, -2}, -1)
-            )
-            {
-                state->safety = 2;
-            }
-        }
-        if (keyboard->drop.was_pressed)
-        {
-            BOARD *board = &state->board;
-            int block_landing = GetBlockLanding(board);
-
-            board->block.pos.y = GetBlockLanding(board);
-            place_block = true;
-        }
-        if (keyboard->clear_board.was_pressed)
-        {
-            reset = true;
-        }
-    }
-
-    // RESET
-    if (reset)
-    {
-        BOARD* board = &state->board;
-
-        memset(board->tiles, 0, sizeof(TILE) * board->width * board->height);
-        board->block_count = 1;
-
-        state->random_number_index = 0;
-        state->get_next_block = true;
-    }
-
-    // GET NEXT BLOCK
-    if (state->get_next_block)
-    {
-        state->get_next_block = false;
-        state->safety = 1;
-
-        BOARD* board = &state->board;
-        GAME_BLOCK *block = &board->block;
-        int* random_number_index = &state->random_number_index;
-        BLOCK_DEF* defs = state->block_defs;
-
-        board->block_count++;
-        int def = 1;
-        if (*random_number_index > 0 && *random_number_index % 13 == 0)
-        {
-            def = 2;
-        }
-        // else if (*random_number_index % 8 == 0)
-        // {
-        //     def = 3;
-        // }
-        else if (*random_number_index % 2 == 1)
-        {
-            def = 2;
-        }
-        *random_number_index += 1;
-        block->def = &defs[def];
-        block->pos = TILE_COORD{18, 16};
-        block->rotate = 0;
-        block->kind = 0;
-        for (int i=0; i < block->def->num_tiles; i++)
-        {
-            block->tiles[i].kind = block->def->tile_kind;
-            block->tiles[i].on_fire = block->tiles[i].kind == Fire;
-            block->tiles[i].health = 4;
-            block->tiles[i].block = board->block_count;
-            TILE_OFFSET offset = block->def->offsets[i];
-        }
-    }
-
-    // BLOCK FALLS
-#if 1
-    {
-        int new_beats = state->clock.time.beats;
-        int beats = max(new_beats - state->beats, 0);
-        state->beats = new_beats;
-
-        while (beats--)
-        {
-            // state->clock.bpm += 1;
-            if (state->safety)
-            {
-                state->safety--;
-            }
-            else if (state->board.block.pos.y > 0 && state->board.block.pos.y != GetBlockLanding(&state->board))
-            {
-                state->board.block.pos.y--;
-            }
-            else
-            {
-                place_block = true;
-            }
-        }
-    }
-#endif
-
-    if (place_block)
-    {
-        BOARD* board = &state->board;
-
-        TILE_COORD coords[4];
-        GetTileTILE_COORDsForBlock(coords, board->block);
-        for (int i=0; i < board->block.def->num_tiles; i++)
-        {
-            Board_SetTile(board, coords[i], board->block.tiles[i]);
-        }
-        state->get_next_block = true;
-    }
-
-    // FIRE
-#if 1
-    state->timer += ticks;
-    int cycles = state->timer / 1000;
-    state->timer %= 1000;
-    while (cycles--)
-    {
-        // BURN DAMAGE
-        {
-            BOARD *board = &state->board;
-            for (int y=0; y < board->height; y++)
-            {
-                for (int x=0; x < board->width; x++)
-                {
-                    TILE_COORD coord = {x, y};
-                    TILE tile = Board_GetTile(board, coord);
-                    if (tile.on_fire && tile.health > 0)
-                    {
-                        tile.health--;
-                        Board_SetTile(board, coord, tile);
-                    }
-                }
-            }
-        }
-
-        // PROPAGATE FIRE
-        {
-            int to_burn_count = 0;
-            BOARD *board = &state->board;
-            for (int y = 0; y < board->height; y++)
-            {
-                for (int x = 0; x < board->width; x++)
-                {
-                    TILE_COORD coord = {x, y};
-                    TILE tile = Board_GetTile(board, coord);
-                    if (tile.kind == Wood && !tile.on_fire)
-                    {
-                        if (Board_GetTile(board, {x, y + 1}).on_fire ||
-                            Board_GetTile(board, {x + 1, y}).on_fire ||
-                            Board_GetTile(board, {x, y - 1}).on_fire ||
-                            Board_GetTile(board, {x - 1, y}).on_fire)
-                        {
-                            TILE_COORD *tile_coord = PushStruct(&state->board_arena, TILE_COORD);
-                            tile_coord->x = x; tile_coord->y = y;
-                            to_burn_count++;
-                        }
-                    }
-                }
-            }
-            while (to_burn_count > 0)
-            {
-                TILE_COORD coord = PopStruct(&state->board_arena, TILE_COORD);
-                TILE tile = Board_GetTile(board, coord);
-                tile.on_fire = true;
-                Board_SetTile(board, coord, tile);
-                to_burn_count--;
-            }
-        }
-    }
-#endif
-
-    // GRAVITY
-    if (state->gravity)
-    {
-        state->gravity_timer += ticks;
-        int cycles = state->gravity_timer / 100;
-        state->gravity_timer %= 100;
-        BOARD *board = &state->board;
-        MEMORY_ARENA *arena = &state->board_arena;
-        while (cycles--)
-        {
-            BLOCK_GRAPH graph = {};
-            graph.nodes = PushArray(arena, board->block_count, BLOCK_GRAPH_NODE);
-            memset(graph.nodes, 0, sizeof(BLOCK_GRAPH_NODE) * board->block_count);
-            graph.edges = (BLOCK_GRAPH_EDGE *)(arena->base + arena->used);
-            // construct tile dependency graph
-            for (int y=0; y < board->height; y++)
-            {
-                for (int x=0; x < board->width; x++)
-                {
-                    TILE_COORD coord = {x, y};
-                    TILE tile = Board_GetTile(board, coord);
-                    if (tile.kind)
-                    {
-                        int to = tile.block;
-                        int from = 0;
-                        bool32 insert = false;
-                        if (coord.y == 0)
-                        {
-                            insert = true;
-                        }
-                        else
-                        {
-                            TILE below = Board_GetTile(board, {x, y - 1});
-                            if (below.kind && below.block != tile.block)
-                            {
-                                insert = true;
-                            }
-                        }
-                        if (insert)
-                        {
-                            BlockGraph_InsertEdge(&graph, arena, tile.block, 0);
-                        }
-                    }
-                }
-            }
-            // sort graph
-            for (int i=0; i < graph.edge_count; i++)
-            {
-                for (int j=i + 1; j < graph.edge_count; j++)
-                {
-                    if (
-                        graph.edges[i].to > graph.edges[j].to ||
-                        (
-                            graph.edges[i].to == graph.edges[j].to &&
-                            graph.edges[i].from > graph.edges[j].from
-                        )
-                    )
-                    {
-                        BLOCK_GRAPH_EDGE temp = graph.edges[i];
-                        graph.edges[i] = graph.edges[j];
-                        graph.edges[j] = temp;
-                    }
-                }
-            }
-            int block = 0;
-            int count = 0;
-            graph.nodes[0].edges = graph.edges;
-            for (int i=0; i < graph.edge_count; i++)
-            {
-                if (graph.edges[i].to != block)
-                {
-                    graph.nodes[block].edge_count = count;
-                    count = 0;
-                    block = graph.edges[i].to;
-                    graph.nodes[block].edges = &graph.edges[i];
-                }
-                count++;
-            }
-            graph.nodes[block].edge_count = count;
-            BLOCK_GRAPH_NODE **stack = PushArray(arena, board->block_count, BLOCK_GRAPH_NODE *);
-            int stack_size = 0;
-            stack[stack_size++] = graph.nodes;
-            while (stack_size > 0)
-            {
-                BLOCK_GRAPH_NODE *node = stack[--stack_size];
-                node->discovered = true;
-                for (int e = 0; e < node->edge_count; e++)
-                {
-                    BLOCK_GRAPH_NODE *other = &graph.nodes[node->edges[e].from];
-                    if (!other->discovered)
-                    {
-                        stack[stack_size++] = other;
-                    }
-                }
-            }
-            for (int y = 0; y < board->height; y++)
-            {
-                for (int x = 0; x < board->width; x++)
-                {
-                    TILE_COORD coord = {x, y};
-                    TILE tile = Board_GetTile(board, coord);
-                    if (tile.kind && !graph.nodes[tile.block].discovered)
-                    {
-                        TILE tile = Board_GetTile(board, coord);
-                        Board_ClearTile(board, coord);
-                        Board_SetTile(board, {x, y - 1}, tile);
-                    }
-                }
-            }
-            PopArray(arena, board->block_count, BLOCK_GRAPH_NODE *);
-            PopArray(arena, graph.edge_count, BLOCK_GRAPH_EDGE);
-            PopArray(arena, board->block_count, BLOCK_GRAPH_NODE);
-        }
-    }
-
-    // DESTROY BLOCKS
-    {
-        BOARD* board = &state->board;
-        for (int y = 0; y < board->height; y++)
-        {
-            for (int x = 0; x < board->width; x++)
-            {
-                TILE_COORD coord = {x, y};
-                TILE tile = Board_GetTile(board, coord);
-                if (tile.kind && tile.health == 0)
-                {
-                    Board_ClearTile(board, coord);
-                    // TODO split up the tiles into separate blocks where necessary
-                }
-            }
-        }
-    }
-
-    // DRAW
-    {
-        PIXEL_BACKBUFFER *buffer = &state->buffer;
-        BOARD *board = &state->board;
-
-        DrawClear(buffer, 1);
-        DrawRect(buffer, 0, 0, GAME_WIDTH, BOARD_Y, 0);
-
-        DrawBlockLanding(buffer, board);
-        DrawBlock(buffer, board->block);
-        {
-            for (int y=0; y < BOARD_HEIGHT; y++)
-            {
-                for (int x=0; x < BOARD_WIDTH; x++)
-                {
-                    TILE_COORD coord = {x, y};
-                    bool32 connections[4];
-                    TILE tile = Board_GetTile(board, coord);
-                    connections[0] = Board_GetTile(board, {x, y + 1}).block == tile.block;
-                    connections[1] = Board_GetTile(board, {x + 1, y}).block == tile.block;
-                    connections[2] = Board_GetTile(board, {x, y - 1}).block == tile.block;
-                    connections[3] = Board_GetTile(board, {x - 1, y}).block == tile.block;
-                    if (tile.kind)
-                    {
-                        DrawTile(buffer, coord, tile, connections);
-                    }
-                }
-            }
-        }
-    }
-}
 
 bool32 InRect(Coord pos, Rect rect)
 {
-    bool32 result = (pos.x > rect.x) && (pos.x <= rect.x + rect.w) && (pos.y > rect.y) && (pos.y <= rect.y + rect.h);
+    bool32 result = (pos.x > rect.pos.x) && (pos.x <= rect.pos.x + rect.w) && (pos.y > rect.pos.y) && (pos.y <= rect.pos.y + rect.h);
+    return result;
+}
+
+bool32 InTileRect(Coord pos, TileRect rect)
+{
+    bool32 result = InRect(pos, ToRect(rect));
     return result;
 }
 
@@ -538,7 +189,7 @@ bool32 InTile(Coord pos, TileCoord coord)
     return result;
 }
 
-bool32 DebugButton(PIXEL_BACKBUFFER* buffer, GAME_BUTTON_STATE click, Coord mouse_pos, TileRect s_rect)
+bool32 DebugButton(PixelBuffer* buffer, GAME_BUTTON_STATE click, Coord mouse_pos, TileRect s_rect)
 {
     bool32 result = 0;
     Rect rect = ToRect(s_rect);
@@ -555,13 +206,12 @@ bool32 DebugButton(PIXEL_BACKBUFFER* buffer, GAME_BUTTON_STATE click, Coord mous
     return result;
 }
 
-void DrawText(PIXEL_BACKBUFFER* buffer, PIXEL_BACKBUFFER* spritemap, char* string, TileRect rect, uint8 first_sprite, int cursor_sprite)
+void DrawText(PixelBuffer* buffer, PixelBuffer* spritemap, char* string, TileRect rect, uint8 first_sprite, int cursor_sprite)
 {
     char c;
     int i = 0;
     c = string[i++];
-    int y = 0;
-    int x = 0;
+    TileCoord pos = {0, 0};
     while (c != 0 && ((c >= 'A' && c <= 'Z') || c == ' ' || c == '\n' || c == '.'))
     {
         if (c != ' ' && c != '\n')
@@ -577,22 +227,22 @@ void DrawText(PIXEL_BACKBUFFER* buffer, PIXEL_BACKBUFFER* spritemap, char* strin
             }
             else sprite = 0;
 
-            DrawSpriteAligned(buffer, spritemap, {rect.x + x, rect.y + y}, sprite);
+            DrawTile(buffer, spritemap, rect.pos + pos, sprite);
         }
         if (c == '\n')
         {
-            x = rect.w;
+            pos.x = rect.w;
         }
         else
         {
-            x++;
+            pos.x++;
         }
-        if (x >= rect.w)
+        if (pos.x >= rect.w)
         {
-            x -= rect.w;
-            y--;
+            pos.x -= rect.w;
+            pos.y--;
         }
-        if (y <= -rect.h)
+        if (pos.y <= -rect.h)
         {
             break;
         }
@@ -600,42 +250,72 @@ void DrawText(PIXEL_BACKBUFFER* buffer, PIXEL_BACKBUFFER* spritemap, char* strin
     }
     if (cursor_sprite >= 0 && cursor_sprite < 256)
     {
-        DrawSpriteAligned(buffer, spritemap, {rect.x + x, rect.y + y}, (uint8)cursor_sprite);
+        DrawTile(buffer, spritemap, rect.pos + pos, (uint8)cursor_sprite);
     }
 }
 
-void DrawText(PIXEL_BACKBUFFER* buffer, PIXEL_BACKBUFFER* spritemap, char* string, TileRect rect, uint8 first_sprite)
+void DrawText(PixelBuffer* buffer, PixelBuffer* spritemap, char* string, TileRect rect, uint8 first_sprite)
 {
     DrawText(buffer, spritemap, string, rect, first_sprite, -1);
 }
 
-void DrawDebugBorder(PIXEL_BACKBUFFER* buffer, PIXEL_BACKBUFFER* spritemap, TileRect rect, uint8 first_sprite)
+void DrawDebugBorder(PixelBuffer* buffer, PixelBuffer* spritemap, TileRect rect, uint8 first_sprite)
 {
     for (int i=0; i < (rect.w - 2); i++)
     {
-        TileCoord where = {rect.x, i + rect.y + 1};
-        DrawSpriteAligned(buffer, spritemap, where, first_sprite);
+        TileCoord where = {rect.pos.x, i + rect.pos.y + 1};
+        DrawTile(buffer, spritemap, where, first_sprite);
     }
     for (int i=0; i < (rect.w - 2); i++)
     {
-        TileCoord where = {i + rect.x + 1, rect.y + rect.h - 1};
-        DrawSpriteAligned(buffer, spritemap, where, first_sprite + 1);
+        TileCoord where = {i + rect.pos.x + 1, rect.pos.y + rect.h - 1};
+        DrawTile(buffer, spritemap, where, first_sprite + 1);
     }
     for (int i=0; i < (rect.w - 2); i++)
     {
-        TileCoord where = {rect.x + rect.w - 1, i + rect.y + 1};
-        DrawSpriteAligned(buffer, spritemap, where, first_sprite + 2);
+        TileCoord where = {rect.pos.x + rect.w - 1, i + rect.pos.y + 1};
+        DrawTile(buffer, spritemap, where, first_sprite + 2);
     }
     for (int i=0; i < (rect.w - 2); i++)
     {
-        TileCoord where = {i + rect.x + 1, rect.y};
-        DrawSpriteAligned(buffer, spritemap, where, first_sprite + 3);
+        TileCoord where = {i + rect.pos.x + 1, rect.pos.y};
+        DrawTile(buffer, spritemap, where, first_sprite + 3);
     }
-    DrawSpriteAligned(buffer, spritemap, {rect.x, rect.y + rect.h - 1}, first_sprite + 4);
-    DrawSpriteAligned(buffer, spritemap, {rect.x + rect.w - 1, rect.y + rect.h - 1}, first_sprite + 5);
-    DrawSpriteAligned(buffer, spritemap, {rect.x + rect.w - 1, rect.y}, first_sprite + 6);
-    DrawSpriteAligned(buffer, spritemap, {rect.x, rect.y}, first_sprite + 7);
+    DrawTile(buffer, spritemap, {rect.pos.x, rect.pos.y + rect.h - 1}, first_sprite + 4);
+    DrawTile(buffer, spritemap, {rect.pos.x + rect.w - 1, rect.pos.y + rect.h - 1}, first_sprite + 5);
+    DrawTile(buffer, spritemap, {rect.pos.x + rect.w - 1, rect.pos.y}, first_sprite + 6);
+    DrawTile(buffer, spritemap, {rect.pos.x, rect.pos.y}, first_sprite + 7);
 }
+
+uint8 LevelMap_GetBlock(LevelMap *map, BlockCoord pos)
+{
+    uint8 result = map->blocks[pos.y * LEVELMAP_WIDTH + pos.x];
+    return result;
+}
+
+void LevelMap_SetBlock(LevelMap *map, PixelBuffer *spritemap, BlockCoord pos, uint8 block)
+{
+    map->blocks[pos.y * LEVELMAP_WIDTH + pos.x] = block;
+    PixelBuffer buffer = {};
+    buffer.pixels = map->pixels;
+    buffer.w = LEVELMAP_WIDTH * BLOCK_SIZE;
+    buffer.h = LEVELMAP_HEIGHT * BLOCK_SIZE;
+    buffer.pitch = buffer.w;
+    TileCoord tile_pos = ToTileCoord(pos);
+    if (block == 0)
+    {
+        TileCoord sprite = {0,0};
+        DrawTile(&buffer, spritemap, tile_pos,                   sprite);
+        DrawTile(&buffer, spritemap, tile_pos + TileCoord{1, 0}, sprite);
+        DrawTile(&buffer, spritemap, tile_pos + TileCoord{0, 1}, sprite);
+        DrawTile(&buffer, spritemap, tile_pos + TileCoord{1, 1}, sprite);
+    }
+    else
+    {
+        DrawTile(&buffer, spritemap, tile_pos, {{2, 0}, 2, 2});
+    }
+}
+
 
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
@@ -647,92 +327,40 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     GAME_STATE *state = (GAME_STATE*) memory->permanent_storage;
 
 
-    // INITIALIZE
+    bool32 reset_tile_map = 0;
     bool32 first = 0;
+
+    // MARK: Initialize
     if (!memory->is_initialized)
     {
         first = 1;
-        PIXEL_BACKBUFFER *buffer = &(state->buffer);
+        PixelBuffer *buffer = &(state->buffer);
         
-        state->board.width = BOARD_WIDTH;
-        state->board.height = BOARD_HEIGHT;
-        state->spritemap = DEBUGLoadSpritemap(thread, memory->DEBUGPlatformReadEntireFile, "spritemap");
-        state->font_spritemap = DEBUGLoadSpritemap(thread, memory->DEBUGPlatformReadEntireFile, "font.sm");
+        state->spritemap.pixels = (uint8*)&state->spritemap_pixels;
+        state->debug_spritemap.pixels = (uint8*)&state->debug_spritemap_pixels;
+        DEBUGLoadSpritemap(&state->spritemap, thread, memory->DEBUGPlatformReadEntireFile, "spritemap.sm");
+        DEBUGLoadSpritemap(&state->debug_spritemap, thread, memory->DEBUGPlatformReadEntireFile, "debug_spritemap.sm");
         
-        buffer->pixels = &state->pixels;
+        buffer->pixels = (uint8*) &state->buffer_pixels;
         buffer->w = GAME_WIDTH;
         buffer->h = GAME_HEIGHT;
-        buffer->pitch = 2 * buffer->w / 8;
+        buffer->pitch = buffer->w;
         memory->is_initialized = true;
-        state->safety = 0;
         state->clock.bpm = 120.0f;
         state->clock.meter = 4;
-        state->instrument.memory = (void*)&(state->instrument_state);
-        state->instrument.Play = Instrument;
-        // InitColors(state);
-        state->gravity = true;
-        state->mode = 1;
+        state->mode = 0;
 
         memory_index used_memory = sizeof(GAME_STATE);
-        InitializeArena(&state->board_arena, Kilobytes(32), (uint8 *) memory->permanent_storage + used_memory);
+        InitializeArena(&state->arena, Kilobytes(32), (uint8 *) memory->permanent_storage + used_memory);
         used_memory += Kilobytes(32);
-        state->board.tiles = PushArray(&state->board_arena, state->board.width * state->board.height, TILE);
 
-        InitializeArena(&state->def_arena, Kilobytes(1), (uint8 *) memory->permanent_storage + used_memory);
         {
-            state->board.block.tiles = PushArray(&state->def_arena, 4, TILE);
-            state->block_defs = PushArray(&state->def_arena, 1, BLOCK_DEF);
-            {
-                int def_count = 0;
-                {
-                    BLOCK_DEF *block = &state->block_defs[def_count++];
-                    block->tile_kind = Metal;
-                    block->offsets[0].x =  0; block->offsets[0].y =  0;
-                    block->offsets[1].x =  1; block->offsets[1].y =  0;
-                    block->offsets[2].x =  1; block->offsets[2].y = -1;
-                    block->offsets[3].x = -1; block->offsets[3].y =  0;
-                    block->num_tiles = 4;
-                }
-                {
-                    BLOCK_DEF *block = &state->block_defs[def_count++];
-                    block->tile_kind = Wood;
-                    block->offsets[0].x =  0; block->offsets[0].y =  0;
-                    block->offsets[1].x =  1; block->offsets[1].y =  0;
-                    block->offsets[2].x =  0; block->offsets[2].y = -1;
-                    block->offsets[3].x = -1; block->offsets[3].y =  0;
-                    block->num_tiles = 4;
-                }
-                {
-                    BLOCK_DEF *block = &state->block_defs[def_count++];
-                    block->tile_kind = Fire;
-                    block->offsets[0].x =  0; block->offsets[0].y =  0;
-                    block->num_tiles = 1;
-                }
-                {
-                    BLOCK_DEF *block = &state->block_defs[def_count++];
-                    block->tile_kind = Seed;
-                    block->offsets[0].x =  0; block->offsets[0].y =  0;
-                    block->num_tiles = 1;
-                }
-            }
+            state->player_position.y = 32;
         }
-    }
 
-    {
-        GAME_CONTROLLER_INPUT *keyboard = &(input->controllers[0]);
-        for (int i=0; i < ArrayCount(keyboard->buttons); i++)
-        {
-            GAME_BUTTON_STATE *button = &(keyboard->buttons[i]);
-            button->was_pressed = 0;
-            button->was_released = 0;
-            if (button->transitions > 0)
-            {
-                button->transitions--;
-                button->is_down = !button->is_down;
-                if (button->is_down) button->was_pressed = 1;
-                else button->was_released = 1;
-            }
-        }
+        reset_tile_map = 1;\
+
+        state->copying = 0;
     }
 
     int key = -1;
@@ -744,21 +372,266 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         input->key_buffer_length--;
     }
 
-    if (key == '\t')
+    if (key == '`')
     {
-        state->mode = (state->mode == 1) ? 2 : 1;
+        state->mode = (state->mode == 1) ? 0 : 1;
     }
 
-    if (state->mode == 0)
+    
+    if (state->mode == 0) // MARK: Play 
     {
-        Play(first, state, input, ticks);
+        PixelBuffer* buffer = &state->buffer;
+        PixelBuffer* spritemap = &state->spritemap;
+        LevelMap* level_map = &state->level_map;
+
+
+        if (key == 'r')
+        {
+            reset_tile_map = 1;
+        }
+    
+        if (reset_tile_map)
+        {
+            for (int y=0; y < LEVELMAP_HEIGHT; y++)
+            {
+                for (int x=0; x < LEVELMAP_WIDTH; x++)
+                {
+                    LevelMap_SetBlock(level_map, spritemap, {x, y}, 0);
+                }
+            }
+            for (int y=0; y < 2; y++)
+            {
+                for (int x=0; x < 16; x++)
+                {
+                    LevelMap_SetBlock(level_map, spritemap, {x, y}, 1);
+                }
+            }
+            LevelMap_SetBlock(level_map, spritemap, {7, 3}, 1);
+            LevelMap_SetBlock(level_map, spritemap, {8, 3}, 1);
+            LevelMap_SetBlock(level_map, spritemap, {8, 4}, 1);
+            LevelMap_SetBlock(level_map, spritemap, {9, 4}, 1);
+            LevelMap_SetBlock(level_map, spritemap, {10, 4}, 1);
+            state->camera = {0, 0};
+
+            state->player_position = {0,2};
+            state->player_velocity = {0.0};
+            state->player_dash_frames = 0;
+        }
+
+        // MARK: Player physics
+        {
+            GAME_CONTROLLER_INPUT* controller = &input->controllers[0];
+            V2 movement_force = {};
+            float movement_energy = 50.0f;
+            if (controller->right.is_down)
+            {
+                if (!state->player_dash_frames)
+                {
+                    movement_force.x += movement_energy;
+                    state->player_facing_right = 1;
+                }
+            }
+            else if (controller->left.is_down)
+            {
+                if (!state->player_dash_frames)
+                {
+                    movement_force.x -= movement_energy;
+                    state->player_facing_right = 0;
+                }
+            }
+            if (controller->a.was_pressed)
+            {
+                if (state->player_on_ground)
+                {
+                    state->player_velocity.y = 12;
+                    state->player_on_ground = 0;
+                }
+            }
+            if (controller->b.was_pressed)
+            {
+                if (!state->player_dash_frames)
+                {
+                    state->player_dash_frames = DASH_START;
+                    state->player_velocity = {50, 0};
+                    if (!state->player_facing_right)
+                    {
+                        state->player_velocity.x *= -1;
+                    }
+                }
+            }
+
+            V2 gravity_force = {0, -90.0f};
+            if (controller->a.is_down && state->player_velocity.y > 0)
+            {
+                gravity_force.y *= 0.28f;
+            }
+            if (state->player_dash_frames)
+            {
+                gravity_force.y = 0.0f;
+            }
+
+            V2 friction_force = {};
+            float friction_energy = 20.0f;
+            if (1)
+            {
+                if (state->player_velocity.x > 1.0f)
+                {
+                    friction_force.x = -friction_energy;
+                }
+                else if (state->player_velocity.x < -1.0f)
+                {
+                    friction_force.x = friction_energy;
+                }
+                else
+                {
+                    state->player_velocity.x = 0.0f;
+                }
+            }
+
+            
+            float vel = state->player_velocity.x;
+            V2 drag_force = {};
+            float drag_coefficient = 0.4f;
+            if (state->player_dash_frames > DASH_HANG)
+            {
+                drag_coefficient = 0.1f;
+            }
+            else if (state->player_dash_frames > 0)
+            {
+                drag_coefficient = 0.5f;
+            }
+            drag_force.x = -vel * (float)fabs(vel) * drag_coefficient;
+            
+            V2 force = movement_force + friction_force + drag_force + gravity_force; 
+            float mass = 1.0f;
+            V2 acceleration = force / mass;
+
+            float seconds = ticks / 1000.0f;
+            
+            state->player_velocity += acceleration * seconds;
+
+            V2 movement = state->player_velocity * seconds;
+            float distance = (float)max(1, ceil(max(fabs(movement.x), fabs(movement.y)))) * 8;
+            V2 interval = movement / distance;
+            Rect collider = {{4, 0}, 6, 14}; 
+            int right = collider.pos.x + collider.w - 1;
+            int top = collider.pos.y + collider.h - 1;
+            Coord checks[4] = {collider.pos, {right, collider.pos.y}, {right, top}, {collider.pos.x, top}};
+            for (int i=0; i < distance; i++) 
+            {
+                {
+                    V2 new_position = state->player_position + V2{interval.x, 0};
+                    bool32 move = 1;
+                    Coord new_coord = ToCoord(new_position);
+                    for (int p=0; p < 4; p++)
+                    {
+                        BlockCoord block_coord = ToBlockCoord(new_coord + checks[p]);
+                        int block = LevelMap_GetBlock(level_map, block_coord);
+        
+                        if (block >= 1 || block_coord.x >= 16 || block_coord.x < 0)
+                        {
+                            move = 0;
+                            interval.x = 0.0f;
+                            state->player_velocity.x = 0.0f;
+                        }
+                    }
+                    if (move)
+                    {
+                        state->player_position = new_position;
+                    }
+                }
+                {
+                    V2 new_position = state->player_position + V2{0, interval.y};
+                    bool32 move = 1;
+                    Coord new_coord = ToCoord(new_position);
+                    for (int p=0; p < 4; p++)
+                    {
+
+                        BlockCoord block_coord = ToBlockCoord(new_coord + checks[p]);
+                        int block = LevelMap_GetBlock(level_map, block_coord);
+        
+                        if (block >= 1)
+                        {
+                            if (p < 2) {
+                                state->player_on_ground = 1;
+                                state->coyote_time = 0;
+                            }
+                            move = 0;
+                            interval.y = 0.0f;
+                            state->player_velocity.y = 0.0f;
+                        }
+                    }
+                    if (move)
+                    {
+                        if (interval.y < 0 && state->player_on_ground)
+                        {
+                            if (state->coyote_time < 500)
+                            {
+                                state->coyote_time += ticks;
+                            }
+                            else
+                            {
+                                state->player_on_ground = 0;
+                            }
+                        }
+                        state->player_position = new_position;
+                    }
+                }
+            }
+
+            if (state->player_dash_frames)
+            {
+                if (ticks >= state->player_dash_frames)
+                {
+                    state->player_dash_frames = 0;
+                }
+                else
+                {
+                    state->player_dash_frames -= (uint16)ticks;
+                }
+            }
+        }
+
+
+        // MARK: Draw
+        {
+            {
+                uint8* set_row = buffer->pixels;
+                uint8* get_row = ((uint8*)level_map->pixels); // TODO: add camera pos
+                for (int y=0; y < GAME_HEIGHT; y++)
+                {
+                    memcpy(set_row, get_row, CAMERA_WIDTH * BLOCK_SIZE);
+                    set_row += buffer->pitch;
+                    get_row += CAMERA_WIDTH * BLOCK_SIZE;
+
+                }
+            }
+
+            TileCoord player_sprite;
+            if (state->player_facing_right)
+            {
+                if (state->player_dash_frames) player_sprite = {4, 2};
+                else player_sprite = {0, 2};
+            }
+            else
+            {
+                if (state->player_dash_frames) player_sprite = {6, 2};
+                else player_sprite = {2, 2};
+            }
+            DrawSprite(buffer, spritemap, ToCoord(state->player_position), TileRect{player_sprite, 2, 2}, 2);
+
+        }
     }
-    else if (state->mode == 1)
+    else if (state->mode == 1) // MARK: Edit
     {
+        PixelBuffer* buffer = &state->buffer;
+        bool32 save = 0;
+        PixelBuffer* current_spritemap = &state->spritemap;
+
         if (key >= '1' && key <= '8')
         {
             int selection = key - '0' - 1;
-            if (selection < state->selected_sprites_count)
+            if (selection < 8)
             {
                 state->current_sprite = (uint8)selection;
             }
@@ -769,191 +642,267 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
         else if (key == 's')
         {
-            DEBUGSaveSpritemap(thread, memory->DEBUGPlatformWriteEntireFile, &state->spritemap);
-        }
-        else if (key == 'q')
-        {
-            state->cursor_color = 0;
-        }
-        else if (key == 'w')
-        {
-            state->cursor_color = 1;
-        }
-        else if (key == 'e')
-        {
-            state->cursor_color = 2;
-        }
-        else if (key == 'r')
-        {
-            state->cursor_color = 3;
+            save = 1;
         }
 
-
-        state->selected_sprites_count = 8;
-        GAME_BUTTON_STATE click = input->controllers[0].primary_click;
+        GAME_BUTTON_STATE click = input->primary_click;
         Coord pos;
         {
-            Coord external_pos = input->controllers[0].mouse_position;
             float x_scale = ((float)state->buffer.w) / render_buffer->w;
             float y_scale = ((float)state->buffer.h) / render_buffer->h;
-            pos.x = (int)round(external_pos.x * x_scale); 
-            pos.y = (int)round(external_pos.y * y_scale); 
+            pos.x = (int)round(input->mouse_x * x_scale); 
+            pos.y = (int)round(input->mouse_y * y_scale); 
         }
-        if (state->edit_mode == 0)
+
+
+
+        if (state->edit_mode == 0) // MARK: Selection mode
         {
+            if (key == 'c')
+            {
+                state->copying = state->copying ? 0 : 1;
+            }
+
             DrawClear(&state->buffer, 3);
-            DrawDebugBorder(&state->buffer, &state->spritemap, {7, 4, 18, 18}, 16);
+            DrawDebugBorder(&state->buffer, &state->debug_spritemap, {7, 4, 18, 18}, 16);
             for (uint8 row=0; row < 16; row++)
             {
                 for (uint8 col=0; col < 16; col++)
                 {
-                    uint8 tile = row * 16 + col;
+                    TileCoord tile = {col, row};
                     TileCoord where = {col + 8, row + 5};
-                    DrawSpriteAligned(&state->buffer, &state->spritemap, where, tile);
-                    if (InTile(pos, where) && click.was_released)
+                    DrawTile(&state->buffer, current_spritemap, where, tile);
+                    if (InTile(pos, where))
                     {
-                        state->selected_sprites[state->current_sprite] = tile;
+                        if (click.was_pressed)
+                        {
+                            if (state->copying)
+                            {
+                                CopySprite(current_spritemap, tile, state->selected_sprites[state->current_sprite]);
+                            }
+                            else
+                            {
+                                state->selected_sprites[state->current_sprite] = {tile, 1, 1};
+                                state->select_start = tile;
+                                state->selecting_sprite = 1;
+                            }
+                        }
+                        if (state->selecting_sprite)
+                        {
+                            TileCoord top_left;
+                            top_left.x = min(state->select_start.x, col);
+                            top_left.y = min(state->select_start.y, row);
+                            int width = max(state->select_start.x, col) - top_left.x + 1;
+                            int height = max(state->select_start.y, row) - top_left.y + 1;
+                            state->selected_sprites[state->current_sprite] = {top_left, width, height};
+                        }
                     }
                 }
             }
 
-            for (int i=0; i < 8; i++)
+            if (state->selecting_sprite && click.was_released)
             {
-                int x = i * 2 + 8;
-                if (i < state->selected_sprites_count)
-                {
-                    DrawSpriteAligned(&state->buffer, &state->spritemap, {x, 22}, state->selected_sprites[i]);
-                    uint8 bubble = (state->current_sprite == i) ? 3 : 2;
-                    DrawSpriteAligned(&state->buffer, &state->spritemap, {x, 23}, bubble);
-                }
-                else if (i == state->selected_sprites_count)
-                {
-                    TileCoord where = {x, 22};
-                    DrawSpriteAligned(&state->buffer, &state->spritemap, where, 4);
-                    if (InTile(pos, where) && click.was_released && state->selected_sprites_count < 8)
-                    {
-                        state->selected_sprites[state->selected_sprites_count] = 0;
-                        state->selected_sprites_count++;
-                    }
-                }
+                state->selecting_sprite = 0;
             }
-
-            if (DebugButton(&state->buffer, click, pos, {15, 2, 2, 1}))
-            {
-                state->edit_mode = 1;
-            }
-
         }
-        else
+        else // MARK: Drawing mode
         {
-            if (key == 'c')
+            TileRect current_sprite = state->selected_sprites[state->current_sprite];
+            switch (key) 
             {
-                for (int x=0; x < 8; x++)
+                case 'c':
                 {
-                    for (int y=0; y < 8; y++)
+                    for (int x=0; x < current_sprite.w * 8; x++)
                     {
-                        DrawPointInSprite(&state->spritemap, {x, y}, state->selected_sprites[state->current_sprite], state->cursor_color);
+                        for (int y=0; y < current_sprite.h * 8; y++)
+                        {
+                            DrawPointInSprite(current_spritemap, {x, y}, current_sprite, state->cursor_color);
+                        }
                     }
-                }
+                } break;
+                case 'f':
+                {
+                    int w = current_sprite.w * 8;
+                    for (int y=0; y < current_sprite.h * 8; y++)
+                    {
+                        for (int x=0; x < w / 2; x++)
+                        {
+                            Coord left_point = {x, y};
+                            Coord right_point = {w - 1 - x, y};
+                            uint8 left = GetPointFromSprite(current_spritemap, left_point, current_sprite);
+                            uint8 right = GetPointFromSprite(current_spritemap, right_point, current_sprite);
+                            DrawPointInSprite(current_spritemap, left_point, current_sprite, right);
+                            DrawPointInSprite(current_spritemap, right_point, current_sprite, left);
+                        }
+                    }
+                } break;
+                case 'q':
+                {
+                    state->cursor_color = 0;
+                } break;
+                case 'w':
+                {
+                    state->cursor_color = 1;
+                } break;
+                case 'e':
+                {
+                    state->cursor_color = 2;
+                } break;
+                case 'r':
+                {
+                    state->cursor_color = 3;
+                } break;
+                case 'x':
+                {
+                    state->swap_colors = state->swap_colors ? 0 : 1;
+                } break;
+                default: break;
             }
-            DrawClear(&state->buffer, 3);
-            DrawDebugBorder(&state->buffer, &state->spritemap, {3, 2, 26, 26}, 16);
+            DrawClear(buffer, 3);
+            DrawDebugBorder(buffer, &state->debug_spritemap, {3, 2, 26, 26}, 16);
             
             for (uint8 color=0; color < 4; color++)
             {
-                Rect rect = {256 - 8 * 3, 8 * 3 + 8 * 3 * 2 * color, 8 * 3, 8 * 3 * 2};
-                DrawRect(&state->buffer, rect, color);
-                if (InRect(pos, rect) && click.was_released)
+                TileRect wide_rect = {32 - 3, 3 + (3 * 2 * color), 3, 3 * 2};
+                TileRect narrow_rect = {32 - 3, 3 + (3 * 2 * color), 2, 3 * 2};
+                DrawRectAligned(buffer, narrow_rect, color);
+                if (InTileRect(pos, wide_rect) && click.was_released)
                 {
+                    if (state->swap_colors)
+                    {
+                        Rect rect = ToRect(current_sprite);
+                        for (int x=0; x < rect.w; x++)
+                        {
+                            for (int y=0; y < rect.h; y++)
+                            {
+                                Coord coord = {x, y};
+                                uint8 pixel = GetPointFromSprite(current_spritemap, coord, current_sprite);
+                                if (pixel == color)
+                                {
+                                    DrawPointInSprite(current_spritemap, coord, current_sprite, state->cursor_color);
+                                }
+                                else if (pixel == state->cursor_color)
+                                {
+                                    DrawPointInSprite(current_spritemap, coord, current_sprite, color);
+                                }
+                            }
+                        }
+                        state->swap_colors = 0;
+                    }
                     state->cursor_color = color;
                 }
             }
+            DrawRectAligned(buffer, {31, 3, 3, 3 * 2 * 4}, state->cursor_color);
 
-            for (int i=0; i < 8; i++)
+            if (state->swap_colors)
             {
-                int y = 25 - (i * 2);
-                if (i < state->selected_sprites_count)
-                {
-                    DrawSpriteAligned(&state->buffer, &state->spritemap, {1, y}, state->selected_sprites[i]);
-                    uint8 bubble = (state->current_sprite == i) ? 3 : 2;
-                    DrawSpriteAligned(&state->buffer, &state->spritemap, {2, y}, bubble);
-                }
+                DrawRectAligned(buffer, {{31, 29}, 1, 1}, 0);
             }
 
-            for (int r=0; r < 8; r++)
+            // pixels
             {
-                for (int c=0; c < 8; c++)
+                Rect to_rect = ToRect(TileRect{{4, 3}, 24, 24});
+                Rect from_rect = ToRect(current_sprite);
+
+                float scale_factor = (float)fmax(current_sprite.w / 24.0f, current_sprite.h / 24.0f);
+
+                bool32 is_hovering = 0;
+                Coord hovered_tile = {};
+
+                for (int row=0; row < to_rect.w; row++)
                 {
-                    uint8 color = GetPointFromSprite(&state->spritemap, {c, r}, state->selected_sprites[state->current_sprite]);
-                    bool32 hover = 0;
-                    Rect rect = {8 * 4 + 8 * 3 * c, 8 * 3 + 8 * 3 * r, 8 * 3, 8 * 3};
-                    if (InRect(pos, rect))
+                    for (int col=0; col < to_rect.h; col++)
                     {
-                        if (click.is_down)
+                        Coord get = {(int)(col * scale_factor), (int)(row * scale_factor)};
+                        if (get.x < from_rect.w && get.y < from_rect.h)
                         {
-                            color = state->cursor_color;
-                            DrawPointInSprite(&state->spritemap, {c, r}, state->selected_sprites[state->current_sprite], color);
+                            uint8 color = GetPointFromSprite(current_spritemap, get, current_sprite);
+                            Coord draw_point = {to_rect.pos.x + col, to_rect.pos.y + row};
+                            DrawPoint(buffer, draw_point, color);
+
+                            if (pos == draw_point)
+                            {
+                                is_hovering = 1;
+                                hovered_tile = get;
+                            }
+
                         }
-                        hover = 1;
                     }
-                    DrawRect(&state->buffer, rect, color);
-                    if (hover)
-                    {
-                        DrawRect(&state->buffer, {rect.x + 8, rect.y + 8, 8, 8}, state->cursor_color);
-                    } 
                 }
-    
-            }
-            if (DebugButton(&state->buffer, click, pos, {24, 1, 2, 1}))
-            {
-                DEBUGSaveSpritemap(thread, memory->DEBUGPlatformWriteEntireFile, &state->spritemap);
-            }
-            if (DebugButton(&state->buffer, click, pos, {1, 27, 2, 2}))
-            {
-                state->edit_mode = 0;
-            }
-    
+
+                if (is_hovering)
+                {
+                    if (click.is_down)
+                    {
+                        DrawPointInSprite(current_spritemap, hovered_tile, current_sprite, state->cursor_color);
+                    }
+                    else
+                    {
+                        Rect hover_rect = {};
+                        hover_rect.pos.x = (int)((hovered_tile.x + 0.33f) / scale_factor + (4 * 8));
+                        hover_rect.pos.y = (int)((hovered_tile.y + 0.33f) / scale_factor + (3 * 8));
+                        hover_rect.w = (int)(0.4f / scale_factor);
+                        hover_rect.h = (int)(0.4f / scale_factor);
+                        DrawRect(buffer, hover_rect, state->cursor_color);
+                    }
+                }
+            }   
         }
+
+
+        for (int i=0; i < 8; i++)
+        {
+            TileRect sprite = state->selected_sprites[i];
+            int y = 22 - i * 3;
+            if (sprite.w > 0)
+            {
+                DrawScaledTile(buffer, current_spritemap, {{1, y}, 2, 2}, sprite);
+            }
+            if (sprite.w > 0 || state->current_sprite == i)
+            {
+                uint8 bubble;
+                if (state->current_sprite == i)
+                {
+                    if (state->edit_mode == 0 && state->copying)
+                    {
+                        bubble = 4;
+                    }
+                    else
+                    {
+                        bubble = 3;
+                    }
+                }
+                else
+                {
+                    bubble = 2;
+                }
+                DrawTile(buffer, &state->debug_spritemap, {2, y + 2}, bubble);
+            }
+        }
+
+
         {
             uint8 sprite = click.is_down ? 1 : 0;
-            DrawSprite(&state->buffer, &state->spritemap, {pos.x, pos.y - 8}, sprite, 0);
+            DrawSprite(buffer, &state->debug_spritemap, {pos.x, pos.y - 8}, sprite, 0);
             // uint8 color = click.is_down ? 2 : 3;
             // DrawRect(&state->buffer, pos.x, pos.y - 4, 4, 4, color);
         }
-
+        if (save)
+        {
+            DEBUGSaveSpritemap(&state->spritemap, thread, memory->DEBUGPlatformReadEntireFile, memory->DEBUGPlatformWriteEntireFile, "spritemap.sm");
+        }
         // DrawText(&state->buffer, &state->spritemap, "HERE IS A SENTENCE.\nAND HERE IS ANOTHER.", {0, 29, 32, 4}, 32);
     }
-    else
-    {
-        DrawClear(&state->buffer, 3);
-        char c = 0;
-        if (key >= 'a' && key <= 'z')
-        {
-            c = (char)key - ('a' - 'A');
-        }
-        else if (key == ' ' || key == '.')
-        {
-            c = (char)key;
-        }
-        else if (key == '\n' || key == '\r')
-        {
-            c = '\n';
-        }
-        if (key == 8 && state->editor_text_position > 0)
-        {
-            state->editor_text[--state->editor_text_position] = 0; 
-        }
-        else if (c > 0)
-        {
-            state->editor_text[state->editor_text_position++] = c;
-        }
-        DrawText(&state->buffer, &state->spritemap, state->editor_text, {1, 28, 30, 28}, 32, 5);
-    }
 
-    // COPY ONTO BACKBUFFER
+#if 1
     {
-        PIXEL_BACKBUFFER *buffer = &state->buffer;
-        void* pixels = buffer->pixels;
+        
+    }
+#endif
+    
+    // MARK: Copy onto backbuffer
+    {
+        PixelBuffer *buffer = &state->buffer;
 
         uint8* pixel_row;
         float horizontal_factor, vertical_factor;
@@ -967,52 +916,32 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         top = (int) ((render_buffer->h - (GAME_HEIGHT * scale_factor)) / 2.0f);
         bottom = (int) (top + (GAME_HEIGHT * scale_factor));
 
-        pixel_row = (uint8*) render_buffer->pixels;
-        uint8* pixel_quad = (uint8*) pixels;
-        uint8 pixel_quad_value = *pixel_quad;
-        int position = 0;
+        pixel_row = buffer->pixels + ((buffer->h - 1) * buffer->pitch);
 
         RGBA_COLOR palette[4];
         GetPalette(palette, selected_palette);
 
-        RGBA_COLOR* render_pixels = (RGBA_COLOR*)render_buffer->pixels;
+        RGBA_COLOR* render_pixel = (RGBA_COLOR*)render_buffer->pixels;
 
-        int y = (GAME_HEIGHT - 1) * scale_factor + top;
-        for (int row=0; row < GAME_HEIGHT; row++)
+        for (int row = (GAME_HEIGHT - 1); row >= 0; row--)
         {
-            int x = left;
-            for (int col=0; col < GAME_WIDTH; col++)
+            for (int i=0; i < scale_factor; i++)
             {
-                int color_index;
-                RGBA_COLOR* render_row;
-                RGBA_COLOR color;
+                uint8* pixel = pixel_row;
 
-                color_index = (pixel_quad_value) & 3;
-                color = palette[color_index];
-                render_row = render_pixels + (x + (y*render_buffer->w));
-                for (int i=0; i < scale_factor; i++)
+                for (int col=0; col < GAME_WIDTH; col++)
                 {
-                    RGBA_COLOR* render_pixel = render_row;
+                    RGBA_COLOR color;
+
+                    color = palette[*pixel];
                     for (int j=0; j < scale_factor; j++)
                     {
                         *render_pixel++ = color;
                     }
-                    render_row += render_buffer->w;
+                    pixel++;
                 }
-                if (position < 3)
-                {
-                    pixel_quad_value = pixel_quad_value >> 2;
-                    position++;
-                }
-                else
-                {
-                    position = 0;
-                    *pixel_quad++;
-                    pixel_quad_value = *pixel_quad;
-                }
-                x += scale_factor;
             }
-            y -= scale_factor;
+            pixel_row -= buffer->pitch;
         }
     }
     StopProfiler(timer, true);

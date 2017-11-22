@@ -1,11 +1,8 @@
 #if !defined(ALPHA_CUBE_H)
 
 #include "platform.h"
-#include "cube_math.h"
 #include "sound.h"
-#include "board.h"
 #include "draw.h"
-#include "block_graph.h"
 
 #define BOARD_WIDTH 32
 #define BOARD_HEIGHT 20
@@ -55,41 +52,75 @@ void * PopSize_(MEMORY_ARENA *arena, memory_index size)
     return result;
 }
 
+#define BLOCK_SIZE 16
+#define CAMERA_WIDTH 16
+#define CAMERA_HEIGHT (CAMERA_WIDTH - 1)
+#define LEVELMAP_WIDTH (CAMERA_WIDTH * 1)
+#define LEVELMAP_HEIGHT (CAMERA_WIDTH * 1)
+
+
+
+struct LevelMap
+{
+    uint8 blocks[LEVELMAP_HEIGHT * LEVELMAP_WIDTH];
+    uint8 pixels[LEVELMAP_HEIGHT * BLOCK_SIZE * LEVELMAP_WIDTH * BLOCK_SIZE];
+};
+
+struct PixelBuffer
+{
+    uint8* pixels;
+    int w, h, pitch;
+};
+
 struct GAME_STATE
 {
-    MEMORY_ARENA def_arena;
-    BLOCK_DEF *block_defs;
-    MEMORY_ARENA board_arena;
-    RGBA_COLOR palettes[3][4];
-    PIXEL_BACKBUFFER buffer;
-    uint8 pixels[(2 * GAME_WIDTH * GAME_HEIGHT) / 8];
-    PIXEL_BACKBUFFER spritemap;
-    PIXEL_BACKBUFFER font_spritemap;
-    BOARD board;
+    MEMORY_ARENA arena;
+    PixelBuffer buffer;
+    uint8 buffer_pixels[GAME_WIDTH * GAME_HEIGHT];
+    PixelBuffer spritemap;
+    uint8 spritemap_pixels[8 * 8 * 256];
+    PixelBuffer debug_spritemap;
+    uint8 debug_spritemap_pixels[8 * 8 * 256];
+    
     int frames;
-    int safety;
-    INSTRUMENT_STATE instrument_state;
-    INSTRUMENT instrument;
-    AUDIO_CLOCK clock;
-    int timer;
-    int gravity_timer;
-    int beats;
-    float32 audio_buffer[1024];
-    int random_number_index;
-    bool32 gravity;
-    bool32 get_next_block;
 
+    
+    // debug state
     int mode;
     int edit_mode;
-    uint8 cursor_color;
-    uint8 selected_sprites[8];
-    uint8 selected_sprites_count;
-    uint16 edited_sprites[8][8];
+    TileRect selected_sprites[8];
     uint8 current_sprite;
+    // selecting
+    bool32 copying;
+    TileCoord select_start;
+    bool32 selecting_sprite;
+    // editing
+    uint8 cursor_color;
+    bool32 swap_colors; 
 
-    char editor_text[256];
-    uint8 editor_text_position;
+    
+    // game state
+    TriangleChannel triangle_channel;
+    AUDIO_CLOCK clock;
+    float64 audio_beats_written;
+    float32 audio_buffer[1024];
+
+    int random_number_index;
+
+    LevelMap level_map;
+    Coord camera;
+
+    V2 player_position;
+    V2 player_velocity;
+    bool32 player_on_ground;
+    uint16 player_dash_frames;
+    int coyote_time;
+    bool32 player_facing_right;
 };
+
+#define DASH_TIME 32
+#define DASH_HANG 400
+#define DASH_START (DASH_TIME + DASH_HANG)
 
 #define ALPHA_CUBE_H
 #endif

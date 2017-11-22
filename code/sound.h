@@ -70,7 +70,6 @@ struct AUDIO_CURSOR
     uint64 written;
     uint64 end;
     float32 samples_per_beat;
-    GAME_AUDIO* audio;
     uint32 samples_per_tick;
     float32* stream;
 
@@ -88,22 +87,27 @@ struct SIN_STATE
     float32 x;
 };
 
-struct TRIANGLE_STATE
+// struct TRIANGLE_STATE
+// {
+//     float32 x;
+// };
+
+struct TriangleChannel
 {
     float32 x;
 };
 
-struct INSTRUMENT_STATE
-{
-    TRIANGLE_STATE triangle;
-};
+// struct INSTRUMENT_STATE
+// {
+//     TRIANGLE_STATE triangle;
+// };
 
-struct INSTRUMENT
-{
-    void* memory;
-    void (*Play)(
-        float32* stream, uint64 length,
-        uint32 samples_per_tick, float frequency, float attack,
-        void* memory
-    );
-};
+// struct INSTRUMENT
+// {
+//     void* memory;
+//     void (*Play)(
+//         float32* stream, uint64 length,
+//         uint32 samples_per_tick, float frequency, float attack,
+//         void* memory
+//     );
+// };
