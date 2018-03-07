@@ -93,12 +93,12 @@ StopProfiler(uint64 start_time, bool32 print)
     time_difference = end_time - start_time;
     performance_frequency = SDL_GetPerformanceFrequency();
     milliseconds = (time_difference * 1000.0) / performance_frequency;
-    // if (print)
-    // {
-    //     char FPSBuffer[256];
-    //     snprintf(FPSBuffer, sizeof(FPSBuffer), "%.02f ms elapsed\n", milliseconds);
-    //     OutputDebugStringA(FPSBuffer);
-    // }
+    if (print)
+    {
+        char FPSBuffer[256];
+        snprintf(FPSBuffer, sizeof(FPSBuffer), "%.02f ms elapsed\n", milliseconds);
+        OutputDebugStringA(FPSBuffer);
+    }
 
     return milliseconds;
 }
@@ -358,9 +358,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->player_position.y = 32;
         }
 
-        reset_tile_map = 1;\
+        reset_tile_map = 1;
+
+        state->debug_frequency = 46.8509750f;
+        state->triangle_channel.num_harmonics = 3;
 
         state->copying = 0;
+        state->muted = 1;
     }
 
     int key = -1;
@@ -377,6 +381,19 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->mode = (state->mode == 1) ? 0 : 1;
     }
 
+    if (key == 'm')
+    {
+        state->muted = (state->muted) ? 0 : 1; 
+    }
+
+
+    if (key == '-') state->debug_frequency -= 0.1f;
+    if (key == '=') state->debug_frequency += 0.1f;
+    if (key == '[') state->debug_frequency -= 0.01f;
+    if (key == ']') state->debug_frequency += 0.01f;
+
+    if (key == ';') state->triangle_channel.num_harmonics--;
+    if (key == '\'') state->triangle_channel.num_harmonics++;
     
     if (state->mode == 0) // MARK: Play 
     {
@@ -422,12 +439,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             GAME_CONTROLLER_INPUT* controller = &input->controllers[0];
             V2 movement_force = {};
-            float movement_energy = 50.0f;
             if (controller->right.is_down)
             {
                 if (!state->player_dash_frames)
                 {
-                    movement_force.x += movement_energy;
+                    movement_force.x += MOVEMENT_ENERGY;
                     state->player_facing_right = 1;
                 }
             }
@@ -435,7 +451,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 if (!state->player_dash_frames)
                 {
-                    movement_force.x -= movement_energy;
+                    movement_force.x -= MOVEMENT_ENERGY;
                     state->player_facing_right = 0;
                 }
             }
@@ -443,7 +459,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 if (state->player_on_ground)
                 {
-                    state->player_velocity.y = 12;
+                    state->player_velocity.y = JUMP_SPEED;
                     state->player_on_ground = 0;
                 }
             }
@@ -452,7 +468,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 if (!state->player_dash_frames)
                 {
                     state->player_dash_frames = DASH_START;
-                    state->player_velocity = {50, 0};
+                    state->player_velocity = {DASH_SPEED, 0};
                     if (!state->player_facing_right)
                     {
                         state->player_velocity.x *= -1;
@@ -460,10 +476,10 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
             }
 
-            V2 gravity_force = {0, -90.0f};
+            V2 gravity_force = {0, -GRAVITY_ENERGY};
             if (controller->a.is_down && state->player_velocity.y > 0)
             {
-                gravity_force.y *= 0.28f;
+                gravity_force.y *= JUMPING_GRAVITY_MOD;
             }
             if (state->player_dash_frames)
             {
@@ -471,46 +487,40 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
 
             V2 friction_force = {};
-            float friction_energy = 20.0f;
-            if (1)
+            if (state->player_velocity.x > 0.1f)
             {
-                if (state->player_velocity.x > 1.0f)
-                {
-                    friction_force.x = -friction_energy;
-                }
-                else if (state->player_velocity.x < -1.0f)
-                {
-                    friction_force.x = friction_energy;
-                }
-                else
-                {
-                    state->player_velocity.x = 0.0f;
-                }
+                friction_force.x = -FRICTION_ENERGY;
+            }
+            else if (state->player_velocity.x < -0.1f)
+            {
+                friction_force.x = FRICTION_ENERGY;
+            }
+            else
+            {
+                state->player_velocity.x = 0.0f;
             }
 
             
             float vel = state->player_velocity.x;
             V2 drag_force = {};
-            float drag_coefficient = 0.4f;
+            float drag_coefficient = DRAG_COEF;
             if (state->player_dash_frames > DASH_HANG)
             {
-                drag_coefficient = 0.1f;
+                drag_coefficient *= DASH_DRAG_COEF_MOD;
             }
             else if (state->player_dash_frames > 0)
             {
-                drag_coefficient = 0.5f;
+                drag_coefficient *= DASH_HANGING_DRAG_COEF_MOD;
             }
             drag_force.x = -vel * (float)fabs(vel) * drag_coefficient;
             
-            V2 force = movement_force + friction_force + drag_force + gravity_force; 
+            V2 force = movement_force + friction_force + drag_force + gravity_force;
             float mass = 1.0f;
             V2 acceleration = force / mass;
-
-            float seconds = ticks / 1000.0f;
             
-            state->player_velocity += acceleration * seconds;
+            state->player_velocity += acceleration;
 
-            V2 movement = state->player_velocity * seconds;
+            V2 movement = state->player_velocity;
             float distance = (float)max(1, ceil(max(fabs(movement.x), fabs(movement.y)))) * 8;
             V2 interval = movement / distance;
             Rect collider = {{4, 0}, 6, 14}; 
@@ -565,9 +575,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     {
                         if (interval.y < 0 && state->player_on_ground)
                         {
-                            if (state->coyote_time < 500)
+                            if (state->coyote_time < 32)
                             {
-                                state->coyote_time += ticks;
+                                state->coyote_time++;
                             }
                             else
                             {
@@ -579,17 +589,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
             }
 
-            if (state->player_dash_frames)
-            {
-                if (ticks >= state->player_dash_frames)
-                {
-                    state->player_dash_frames = 0;
-                }
-                else
-                {
-                    state->player_dash_frames -= (uint16)ticks;
-                }
-            }
+            if (state->player_dash_frames) state->player_dash_frames--;
         }
 
 
@@ -894,9 +894,25 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // DrawText(&state->buffer, &state->spritemap, "HERE IS A SENTENCE.\nAND HERE IS ANOTHER.", {0, 29, 32, 4}, 32);
     }
 
-#if 1
+#if 0
+    if (1)
     {
-        
+        PixelBuffer* buffer = &state->buffer;
+        DrawClear(buffer, 0);
+        DrawRect(buffer, {{0, 181}, 256, 60}, 3);
+        DrawRect(buffer, {{0, 0}, 256, 60}, 3);
+        for (int i=0; i < 256; i++)
+        {
+            float32 value = 0.0;
+            for (int j=0; j < 4; j++)
+            {
+                value += state->audio_buffer[i * 4 + j];
+            }
+            value = value / 4.0f;
+            value = (value + 1.0f) / 2.0f;
+            int height = (int)(value * 120.0f) + 1;
+            DrawRect(buffer, {{i, 60}, 1, height}, 2);
+        }
     }
 #endif
     
@@ -944,6 +960,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             pixel_row -= buffer->pitch;
         }
     }
-    StopProfiler(timer, true);
+    StopProfiler(timer, false);
     return 1;
 }

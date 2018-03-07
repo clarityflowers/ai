@@ -659,7 +659,7 @@ WinMain(
         //     OutputDebugStringA(out_buffer);
         // }
         THREAD_CONTEXT thread = {};
-		game_is_running = game_is_running && game.UpdateAndRender(&thread, &game_memory, &buffer, new_input, SCREEN_TICKS_PER_FRAME);
+		game_is_running = game_is_running && game.UpdateAndRender(&thread, &game_memory, &buffer, new_input);
 
         // Audio
         {

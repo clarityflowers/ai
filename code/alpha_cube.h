@@ -104,6 +104,9 @@ struct GAME_STATE
     AUDIO_CLOCK clock;
     float64 audio_beats_written;
     float32 audio_buffer[1024];
+    bool32 muted;
+    int audio_debug_refresh_timer;
+    float32 debug_frequency;
 
     int random_number_index;
 
@@ -112,15 +115,26 @@ struct GAME_STATE
 
     V2 player_position;
     V2 player_velocity;
-    bool32 player_on_ground;
-    uint16 player_dash_frames;
-    int coyote_time;
-    bool32 player_facing_right;
 };
 
-#define DASH_TIME 32
-#define DASH_HANG 400
+#define MOVEMENT_ENERGY 0.15f
+#define GRAVITY_ENERGY 0.18f
+#define FRICTION_ENERGY 0.1f
+#define DRAG_COEF 0.3f
+
+#define JUMP_SPEED 0.6f
+#define JUMPING_GRAVITY_MOD 0.28f
+
+#define DASH_SPEED 2.0f
+#define DASH_DRAG_COEF_MOD 0.2f
+#define DASH_HANGING_DRAG_COEF_MOD 1.5f
+
+#define DASH_TIME 2
+#define DASH_HANG 10
+#define COYOTE_TIME 32
 #define DASH_START (DASH_TIME + DASH_HANG)
+
+
 
 #define ALPHA_CUBE_H
 #endif

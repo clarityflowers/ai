@@ -95,6 +95,7 @@ struct SIN_STATE
 struct TriangleChannel
 {
     float32 x;
+    int num_harmonics;
 };
 
 // struct INSTRUMENT_STATE
