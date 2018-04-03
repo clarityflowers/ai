@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "vector.h"
 
-#if ALPHA_CUBE_SLOW
+#if CLAIRE_AI_SLOW
 #define Assert(Expression) \
     if(!(Expression)) {*(int *)0 = 0;}
 #else

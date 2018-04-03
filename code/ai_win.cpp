@@ -7,7 +7,8 @@
 #include <stdio.h>
 #include <malloc.h>
 
-#include "alpha_cube_win.h"
+
+#include "ai_win.h"
 
 // #define SCREEN_WIDTH 1024
 // #define SCREEN_HEIGHT 960
@@ -359,8 +360,8 @@ WinMain(
     SDL_Thread *giffer_thread = NULL;
 
 	Win_GetEXEFileName(&state);
-	Win_BuildEXEPathFileName(&state, "alpha_cube.dll", sizeof(source_game_code_dll_full_path), source_game_code_dll_full_path);
-    Win_BuildEXEPathFileName(&state, "alpha_cube_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
+	Win_BuildEXEPathFileName(&state, "ai.dll", sizeof(source_game_code_dll_full_path), source_game_code_dll_full_path);
+    Win_BuildEXEPathFileName(&state, "ai_temp.dll", sizeof(temp_game_code_dll_full_path), temp_game_code_dll_full_path);
 	Win_BuildEXEPathFileName(&state, "lock.tmp", sizeof(game_code_lock_full_path), game_code_lock_full_path);
 	game = Win_LoadGameCode(source_game_code_dll_full_path, temp_game_code_dll_full_path);
 
@@ -427,7 +428,7 @@ WinMain(
 	buffer.pitch = buffer.depth * buffer.w;
     render_buffer.pitch = buffer.pitch;
 
-#if ALPHA_CUBE_INTERNAL
+#if CLAIRE_AI_INTERNAL
 	base_address = 0;
 #else
 	base_address = (LPVOID)Terabytes(2);

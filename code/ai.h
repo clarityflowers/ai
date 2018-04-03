@@ -1,4 +1,4 @@
-#if !defined(ALPHA_CUBE_H)
+#if !defined(CLAIRE_AI_H)
 
 #include "platform.h"
 #include "sound.h"
@@ -119,24 +119,5 @@ struct GAME_STATE
     uint8 attack_frames;
 };
 
-#define MOVEMENT_ENERGY 0.15f
-#define GRAVITY_ENERGY 0.18f
-#define FRICTION_ENERGY 0.1f
-#define DRAG_COEF 0.3f
-
-#define JUMP_SPEED 0.6f
-#define JUMPING_GRAVITY_MOD 0.28f
-
-#define DASH_SPEED 2.0f
-#define DASH_DRAG_COEF_MOD 0.2f
-#define DASH_HANGING_DRAG_COEF_MOD 1.5f
-
-#define DASH_TIME 2
-#define DASH_HANG 10
-#define COYOTE_TIME 32
-#define DASH_START (DASH_TIME + DASH_HANG)
-
-
-
-#define ALPHA_CUBE_H
+#define CLAIRE_AI_H
 #endif
