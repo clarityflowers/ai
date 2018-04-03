@@ -19,6 +19,11 @@ V2 operator*(V2 a, float b)
     V2 result = {a.x * b, a.y * b};
     return result;
 }
+V2 operator*(float a, V2 b)
+{
+    V2 result = b * a;
+    return result;
+}
 
 V2 operator/(V2 a, float b)
 {

@@ -287,9 +287,15 @@ DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
 internal void
 Win_LogKeyPress(GAME_BUTTON_STATE* button, SDL_Event* event)
 {
-	if (button->is_down != (event->key.type == SDL_KEYDOWN))
+    {
+        char text[256];
+        snprintf(text, sizeof(text), "Log Press %d\n %d\n", button->is_down, event->key.type);
+        OutputDebugStringA(text);
+    }
+    bool current_state = ((button->is_down ? 1 : 0) + button->transitions) % 2 == 1;
+	if (current_state != (event->key.type == SDL_KEYDOWN))
 	{
-		button->transitions++;
+        button->transitions++;
 	}
 }
 
@@ -520,6 +526,14 @@ WinMain(
 				{
 					switch(event.key.keysym.sym)
 					{
+                        case SDLK_w:
+                        {
+                            Win_LogKeyPress(&(new_keyboard->up), &event);
+                        } break;
+                        case SDLK_s:
+                        {
+                            Win_LogKeyPress(&(new_keyboard->down), &event);
+                        } break;
 						case SDLK_d:
 						{
 							Win_LogKeyPress(&(new_keyboard->right), &event);

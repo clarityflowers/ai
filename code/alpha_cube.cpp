@@ -431,8 +431,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->camera = {0, 0};
 
             state->player_position = {0,2};
-            state->player_velocity = {0.0};
-            state->player_dash_frames = 0;
+            state->player_velocity = {0,0};
+            state->player_direction = 0;
         }
 
         // MARK: Player physics
@@ -441,86 +441,86 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             V2 movement_force = {};
             if (controller->right.is_down)
             {
-                if (!state->player_dash_frames)
-                {
-                    movement_force.x += MOVEMENT_ENERGY;
-                    state->player_facing_right = 1;
-                }
+                movement_force.x += 1;
+                state->player_direction = 1;
             }
             else if (controller->left.is_down)
             {
-                if (!state->player_dash_frames)
-                {
-                    movement_force.x -= MOVEMENT_ENERGY;
-                    state->player_facing_right = 0;
-                }
+                movement_force.x -= 1;
+                state->player_direction = 3;
             }
-            if (controller->a.was_pressed)
+            if (controller->up.is_down)
             {
-                if (state->player_on_ground)
-                {
-                    state->player_velocity.y = JUMP_SPEED;
-                    state->player_on_ground = 0;
-                }
+                movement_force.y += 1;
+                state->player_direction = 0;
             }
-            if (controller->b.was_pressed)
+            else if (controller->down.is_down)
             {
-                if (!state->player_dash_frames)
-                {
-                    state->player_dash_frames = DASH_START;
-                    state->player_velocity = {DASH_SPEED, 0};
-                    if (!state->player_facing_right)
-                    {
-                        state->player_velocity.x *= -1;
-                    }
-                }
+                movement_force.y -= 1;
+                state->player_direction = 2;
+            }
+            else if(controller->a.is_down)
+            {
+                state->attack_frames = 10;
+            }
+            movement_force = Normalize(movement_force) * MOVEMENT_ENERGY;
+            // if (controller->a.was_pressed)
+            // {
+            //     if (state->player_on_ground)
+            //     {
+            //         state->player_velocity.y = JUMP_SPEED;
+            //         state->player_on_ground = 0;
+            //     }
+            // }
+            // if (controller->b.was_pressed)
+            // {
+            //     if (!state->player_dash_frames)
+            //     {
+            //         state->player_dash_frames = DASH_START;
+            //         state->player_velocity = {DASH_SPEED, 0};
+            //         if (!state->player_facing_right)
+            //         {
+            //             state->player_velocity.x *= -1;
+            //         }
+            //     }
+            // }
+
+            // V2 gravity_force = {0, -GRAVITY_ENERGY};
+            // if (controller->a.is_down && state->player_velocity.y > 0)
+            // {
+            //     gravity_force.y *= JUMPING_GRAVITY_MOD;
+            // }
+            // if (state->player_dash_frames)
+            // {
+            //     gravity_force.y = 0.0f;
+            // }
+
+            float velocity = Length(state->player_velocity);
+            V2 v_direction = Normalize(state->player_velocity);
+            V2 friction_force = {0, 0};
+            if (velocity > 0.1f || velocity < -0.1f) {
+                friction_force = -1 * FRICTION_ENERGY * v_direction; 
             }
 
-            V2 gravity_force = {0, -GRAVITY_ENERGY};
-            if (controller->a.is_down && state->player_velocity.y > 0)
-            {
-                gravity_force.y *= JUMPING_GRAVITY_MOD;
-            }
-            if (state->player_dash_frames)
-            {
-                gravity_force.y = 0.0f;
-            }
 
-            V2 friction_force = {};
-            if (state->player_velocity.x > 0.1f)
-            {
-                friction_force.x = -FRICTION_ENERGY;
-            }
-            else if (state->player_velocity.x < -0.1f)
-            {
-                friction_force.x = FRICTION_ENERGY;
-            }
-            else
-            {
-                state->player_velocity.x = 0.0f;
-            }
+            V2 drag_force = -1 * v_direction * (velocity * velocity * DRAG_COEF);
 
-            
-            float vel = state->player_velocity.x;
-            V2 drag_force = {};
-            float drag_coefficient = DRAG_COEF;
-            if (state->player_dash_frames > DASH_HANG)
-            {
-                drag_coefficient *= DASH_DRAG_COEF_MOD;
-            }
-            else if (state->player_dash_frames > 0)
-            {
-                drag_coefficient *= DASH_HANGING_DRAG_COEF_MOD;
-            }
-            drag_force.x = -vel * (float)fabs(vel) * drag_coefficient;
-            
-            V2 force = movement_force + friction_force + drag_force + gravity_force;
+            V2 force = movement_force + friction_force + drag_force;
             float mass = 1.0f;
             V2 acceleration = force / mass;
             
             state->player_velocity += acceleration;
 
             V2 movement = state->player_velocity;
+            if (state->player_velocity.y < 0.1f && state->player_velocity.y > -0.1f)
+            {
+                movement.y = 0.0f;
+            } 
+            if (state->player_velocity.x < 0.1f && state->player_velocity.x > -0.1f)
+            {
+                movement.x = 0.0f;
+            } 
+
             float distance = (float)max(1, ceil(max(fabs(movement.x), fabs(movement.y)))) * 8;
             V2 interval = movement / distance;
             Rect collider = {{4, 0}, 6, 14}; 
@@ -556,16 +556,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     Coord new_coord = ToCoord(new_position);
                     for (int p=0; p < 4; p++)
                     {
-
                         BlockCoord block_coord = ToBlockCoord(new_coord + checks[p]);
                         int block = LevelMap_GetBlock(level_map, block_coord);
         
-                        if (block >= 1)
+                        if (block >= 1 || block_coord.y >= 16 || block_coord.y < 0)
                         {
-                            if (p < 2) {
-                                state->player_on_ground = 1;
-                                state->coyote_time = 0;
-                            }
                             move = 0;
                             interval.y = 0.0f;
                             state->player_velocity.y = 0.0f;
@@ -573,23 +568,16 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     }
                     if (move)
                     {
-                        if (interval.y < 0 && state->player_on_ground)
-                        {
-                            if (state->coyote_time < 32)
-                            {
-                                state->coyote_time++;
-                            }
-                            else
-                            {
-                                state->player_on_ground = 0;
-                            }
-                        }
                         state->player_position = new_position;
                     }
                 }
             }
+        }
 
-            if (state->player_dash_frames) state->player_dash_frames--;
+        if (state->attack_frames)
+        {
+            state->attack_frames--;
+
         }
 
 
@@ -607,18 +595,33 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
             }
 
-            TileCoord player_sprite;
-            if (state->player_facing_right)
-            {
-                if (state->player_dash_frames) player_sprite = {4, 2};
-                else player_sprite = {0, 2};
+            TileCoord player_sprite = {0, 4};
+            if (state->player_direction == 0) {
+                player_sprite = {2, 4};
             }
-            else
-            {
-                if (state->player_dash_frames) player_sprite = {6, 2};
-                else player_sprite = {2, 2};
+            else if (state->player_direction == 1) {
+                player_sprite = {4, 4};
             }
+            else if (state->player_direction == 2) {
+                player_sprite = {0, 4};
+            }
+            else {
+                player_sprite = {6, 4};
+            }
+            // if (state->player_facing_right)
+            // {
+            //     if (state->player_dash_frames) player_sprite = {4, 2};
+            //     else player_sprite = {0, 2};
+            // }
+            // else
+            // {
+            //     if (state->player_dash_frames) player_sprite = {6, 2};
+            //     else player_sprite = {2, 2};
+            // }
             DrawSprite(buffer, spritemap, ToCoord(state->player_position), TileRect{player_sprite, 2, 2}, 2);
+            if (state->attack_frames) {
+                DrawSprite(buffer, spritemap, ToCoord(state->player_position), TileRect{0, 6, 2, 2}, 2);
+            }
 
         }
     }

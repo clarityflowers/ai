@@ -115,6 +115,8 @@ struct GAME_STATE
 
     V2 player_position;
     V2 player_velocity;
+    uint8 player_direction;
+    uint8 attack_frames;
 };
 
 #define MOVEMENT_ENERGY 0.15f
