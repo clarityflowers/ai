@@ -3,8 +3,8 @@ echo WAITING FOR PDB > lock.tmp
 set SDLPath=C:\projects\build\SDL2-2.0.4
 set GifferPath=C:\projects\build\giffer
 
-REM set CommonCompilerFlags=-MTd -nologo -Gm- -GR- -EHa- -Ox -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -DALPHA_CUBE_INTERNAL=1 -DALPHA_CUBE_SLOW=1 -DALPHA_CUBE_WIN32=1 -FC -Z7
-set CommonCompilerFlags=-MTd -nologo -Gm- -GR- -EHa- -Od -Oi -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -DALPHA_CUBE_INTERNAL=1 -DALPHA_CUBE_SLOW=1 -DALPHA_CUBE_WIN32=1 -FC -Z7
+REM set CommonCompilerFlags=-MTd -nologo -Gm- -GR- -EHa- -Ox -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -DCLAIRE_AI_INTERNAL=1 -DCLAIRE_AI_SLOW=1 -DCLAIRE_AI_WIN32=1 -FC -Z7
+set CommonCompilerFlags=-MTd -nologo -Gm- -GR- -EHa- -Od -Oi -WX -W4 -wd4201 -wd4100 -wd4189 -wd4456 -DCLAIRE_AI_INTERNAL=1 -DCLAIRE_AI_SLOW=1 -DCLAIRE_AI_WIN32=1 -FC -Z7
 set CommonLinkerFlags= -incremental:no -opt:ref user32.lib gdi32.lib winmm.lib xaudio2.lib
 REM TODO: - can we just build both with one exe?
 
@@ -20,8 +20,8 @@ REM cl %CommonCompilerFlags% ..\code\win32.cpp /link -subsystem:windows,5.1 %Com
 
 REM 64-bit build
 del *.pdb > NUL 2> NUL
-cl %CommonCompilerFlags% ..\code\alpha_cube.cpp -Fmalpha_cube.map -LD /I %SDLPath%\include /link -incremental:no -opt:ref -PDB:alpha_cube_%random%.pdb -EXPORT:GameUpdateAndRender -EXPORT:GameGetSoundSamples /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
+cl %CommonCompilerFlags% ..\code\ai.cpp -Fmai.map -LD /I %SDLPath%\include /link -incremental:no -opt:ref -PDB:ai_%random%.pdb -EXPORT:GameUpdateAndRender -EXPORT:GameGetSoundSamples /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
 REM -EXPORT:GameGetSoundSamples
-cl %CommonCompilerFlags% ..\code\alpha_cube_win.cpp -Fmalpha_cube_win32.map /I %GifferPath%\ %GifferPath%\giffer.lib /I %SDLPath%\include  /link %CommonLinkerFlags%  /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
-del lock.tmp
+cl %CommonCompilerFlags% ..\code\ai_win.cpp -Fmai_win32.map /I %GifferPath%\ %GifferPath%\giffer.lib /I %SDLPath%\include  /link %CommonLinkerFlags%  /LIBPATH:%SDLPath%\lib\x64 SDL2.lib SDL2main.lib
 popd
+del lock.tmp

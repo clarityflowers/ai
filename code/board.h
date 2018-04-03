@@ -55,5 +55,5 @@ struct BOARD
     GAME_BLOCK block;
 };
 
-#define ALPHA_CUBE_H
+#define CLAIRE_AI_H
 #endif

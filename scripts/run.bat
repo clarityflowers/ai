@@ -1,5 +1,5 @@
 @echo off
 
 pushd ..\data
-..\build\alpha_cube_win.exe
+..\build\ai_win.exe
 popd

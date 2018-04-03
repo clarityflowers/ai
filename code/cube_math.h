@@ -1,4 +1,4 @@
-#if !defined(ALPHA_CUBE_H)
+#if !defined(CLAIRE_AI_H)
 
 union TILE_COORD
 {

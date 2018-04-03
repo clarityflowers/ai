@@ -1,4 +1,4 @@
-#if !defined (ALPHA_CUBE_WIN32_H)
+#if !defined (CLAIRE_AI_WIN32_H)
 
 #define WIN32_STATE_FILE_NAME_COUNT MAX_PATH
 
@@ -46,5 +46,5 @@ struct WIN_STATE
     char *one_past_last_exe_file_name_slash;
 };
 
-#define ALPHA_CUBE_WIN32_H
+#define CLAIRE_AI_WIN32_H
 #endif

@@ -1,4 +1,4 @@
-#if !defined(ALPHA_CUBE_H)
+#if !defined(CLAIRE_AI_H)
 
 #include "platform.h"
 #include "cube_math.h"
@@ -78,5 +78,5 @@ struct GAME_STATE
     bool32 get_next_block;
 };
 
-#define ALPHA_CUBE_H
+#define CLAIRE_AI_H
 #endif
