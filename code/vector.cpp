@@ -7,6 +7,12 @@ V2 operator+(V2 a, V2 b)
     return result;
 }
 
+V2 operator-(V2 a, V2 b)
+{
+    V2 result = {a.x - b.x, a.y - b.y};
+    return result;
+}
+
 V2 operator+=(V2& a, V2 b)
 {
     V2 result = a + b;

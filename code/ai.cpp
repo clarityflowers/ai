@@ -287,35 +287,46 @@ void DrawDebugBorder(PixelBuffer* buffer, PixelBuffer* spritemap, TileRect rect,
     DrawTile(buffer, spritemap, {rect.pos.x, rect.pos.y}, first_sprite + 7);
 }
 
-uint8 LevelMap_GetBlock(LevelMap *map, BlockCoord pos)
+global_variable int senses[1] = { NEAR_FAR, BRIGHT_DARK };
+
+float sense_feel(Sense* sense, value)
 {
-    uint8 result = map->blocks[pos.y * LEVELMAP_WIDTH + pos.x];
+    float old_mean = sense->mean;
+    float old_variance = sense->variance;
+    float new_mean = (old_mean * 0.99f) + (0.01f * value);
+    float new_variance = (0.99f * old_variance) + (0.01f * (value - new_mean) * (value - old_mean));
+    sense->mean = new_mean;
+    sense->variance = new_variance;
+    float deviation = sqrtf(new_variance);
+    float result = max(min((value - new_mean) / deviation, 1.0f), -1.0f);
     return result;
 }
 
-void LevelMap_SetBlock(LevelMap *map, PixelBuffer *spritemap, BlockCoord pos, uint8 block)
+int association_index(int x, int y)
 {
-    map->blocks[pos.y * LEVELMAP_WIDTH + pos.x] = block;
-    PixelBuffer buffer = {};
-    buffer.pixels = map->pixels;
-    buffer.w = LEVELMAP_WIDTH * BLOCK_SIZE;
-    buffer.h = LEVELMAP_HEIGHT * BLOCK_SIZE;
-    buffer.pitch = buffer.w;
-    TileCoord tile_pos = ToTileCoord(pos);
-    if (block == 0)
-    {
-        TileCoord sprite = {0,0};
-        DrawTile(&buffer, spritemap, tile_pos,                   sprite);
-        DrawTile(&buffer, spritemap, tile_pos + TileCoord{1, 0}, sprite);
-        DrawTile(&buffer, spritemap, tile_pos + TileCoord{0, 1}, sprite);
-        DrawTile(&buffer, spritemap, tile_pos + TileCoord{1, 1}, sprite);
+    Assert(x !== y);
+    int a, b;
+    if (x < y) {
+        a = x;
+        b = y;
     }
-    else
-    {
-        DrawTile(&buffer, spritemap, tile_pos, {{2, 0}, 2, 2});
+    else {
+        a = y;
+        b = x;
     }
+    int index = b + a * IDEAS_COUNT + ((a + 1) * (a + 2) / 2);
+    return index;
 }
 
+float association_get(float* associations, int x, int y)
+{
+    float result = associations[association_index(x, y)];
+}
+
+void association_set(float* associations, int x, int y, float value)
+{
+    associations[association_index(x, y)] = value;
+}
 
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
@@ -327,7 +338,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     GAME_STATE *state = (GAME_STATE*) memory->permanent_storage;
 
 
-    bool32 reset_tile_map = 0;
+    bool32 re_init = 0;
     bool32 first = 0;
 
     // MARK: Initialize
@@ -354,17 +365,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         InitializeArena(&state->arena, Kilobytes(32), (uint8 *) memory->permanent_storage + used_memory);
         used_memory += Kilobytes(32);
 
-        {
-            state->player_position.y = 32;
-        }
-
-        reset_tile_map = 1;
+        re_init = 1;
 
         state->debug_frequency = 46.8509750f;
         state->triangle_channel.num_harmonics = 3;
 
         state->copying = 0;
         state->muted = 1;
+        
+        for (int i=0; i < ArrayCount(senses); i++) {
+            state->senses[i].mean = 1.0f;
+            state->senses[i].variance = 1.0f;
+        }
     }
 
     int key = -1;
@@ -399,230 +411,48 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         PixelBuffer* buffer = &state->buffer;
         PixelBuffer* spritemap = &state->spritemap;
-        LevelMap* level_map = &state->level_map;
-
 
         if (key == 'r')
         {
-            reset_tile_map = 1;
+            re_init = 1;
         }
     
-        if (reset_tile_map)
+        if (re_init)
         {
-            for (int y=0; y < LEVELMAP_HEIGHT; y++)
-            {
-                for (int x=0; x < LEVELMAP_WIDTH; x++)
-                {
-                    LevelMap_SetBlock(level_map, spritemap, {x, y}, 0);
-                }
-            }
-            for (int y=0; y < 2; y++)
-            {
-                for (int x=0; x < 16; x++)
-                {
-                    LevelMap_SetBlock(level_map, spritemap, {x, y}, 1);
-                }
-            }
-            LevelMap_SetBlock(level_map, spritemap, {7, 3}, 1);
-            LevelMap_SetBlock(level_map, spritemap, {8, 3}, 1);
-            LevelMap_SetBlock(level_map, spritemap, {8, 4}, 1);
-            LevelMap_SetBlock(level_map, spritemap, {9, 4}, 1);
-            LevelMap_SetBlock(level_map, spritemap, {10, 4}, 1);
-            state->camera = {0, 0};
-
-            state->player_position = {0,2};
-            state->player_velocity = {0,0};
-            state->player_direction = 0;
+            state->friend_position = {5.0f, 5.0f};
+            state->friend_temperature = 0.5f;
         }
 
-        // MARK: Player physics
+        state->entities[0] = {{{4, 0}, 2, 2}, {10.0f, 10.f}, 150.0f, 20.0f};
+        state->entities[1] = {{{0, 1}, 1, 1}, {3.0f, 7.0f}, 30.0f, 0.5f};
+        // FRIEND THINKING
         {
-            GAME_CONTROLLER_INPUT* controller = &input->controllers[0];
-            V2 movement_force = {};
-            if (controller->right.is_down)
-            {
-                movement_force.x += 1;
-                state->player_direction = 1;
-            }
-            else if (controller->left.is_down)
-            {
-                movement_force.x -= 1;
-                state->player_direction = 3;
-            }
-            if (controller->up.is_down)
-            {
-                movement_force.y += 1;
-                state->player_direction = 0;
-            }
-            else if (controller->down.is_down)
-            {
-                movement_force.y -= 1;
-                state->player_direction = 2;
-            }
-            else if(controller->a.is_down)
-            {
-                state->attack_frames = 10;
-            }
-            movement_force = Normalize(movement_force) * MOVEMENT_ENERGY;
-            // if (controller->a.was_pressed)
-            // {
-            //     if (state->player_on_ground)
-            //     {
-            //         state->player_velocity.y = JUMP_SPEED;
-            //         state->player_on_ground = 0;
-            //     }
-            // }
-            // if (controller->b.was_pressed)
-            // {
-            //     if (!state->player_dash_frames)
-            //     {
-            //         state->player_dash_frames = DASH_START;
-            //         state->player_velocity = {DASH_SPEED, 0};
-            //         if (!state->player_facing_right)
-            //         {
-            //             state->player_velocity.x *= -1;
-            //         }
-            //     }
-            // }
+            float** associations = (float**)state->associations;
+            float* mood = (float*)state->mood;
 
-            // V2 gravity_force = {0, -GRAVITY_ENERGY};
-            // if (controller->a.is_down && state->player_velocity.y > 0)
-            // {
-            //     gravity_force.y *= JUMPING_GRAVITY_MOD;
-            // }
-            // if (state->player_dash_frames)
-            // {
-            //     gravity_force.y = 0.0f;
-            // }
-
-            float velocity = Length(state->player_velocity);
-            V2 v_direction = Normalize(state->player_velocity);
-            V2 friction_force = {0, 0};
-            if (velocity > 0.1f || velocity < -0.1f) {
-                friction_force = -1 * FRICTION_ENERGY * v_direction; 
+            // sense things
+            for (int i=0; i < 2; i++)
+            {
+                Entity entity = state->entities[i];
+                
+                // calculate a new mean and variance pretending that we had just added the 100th item to the list.
+                float distance = Length(state->friend_position - entity.position);
+                sense_feel(&state->senses[0], distance);
+                sense_feel(&state->senses[1], entity.brightness);
+                associations[senses[0]][senses]
             }
 
-
-            V2 drag_force = -1 * v_direction * (velocity * velocity * DRAG_COEF);
-
-            V2 force = movement_force + friction_force + drag_force;
-            float mass = 1.0f;
-            V2 acceleration = force / mass;
-            
-            state->player_velocity += acceleration;
-
-            V2 movement = state->player_velocity;
-            if (state->player_velocity.y < 0.1f && state->player_velocity.y > -0.1f)
-            {
-                movement.y = 0.0f;
-            } 
-            if (state->player_velocity.x < 0.1f && state->player_velocity.x > -0.1f)
-            {
-                movement.x = 0.0f;
-            } 
-
-            float distance = (float)max(1, ceil(max(fabs(movement.x), fabs(movement.y)))) * 8;
-            V2 interval = movement / distance;
-            Rect collider = {{4, 0}, 6, 14}; 
-            int right = collider.pos.x + collider.w - 1;
-            int top = collider.pos.y + collider.h - 1;
-            Coord checks[4] = {collider.pos, {right, collider.pos.y}, {right, top}, {collider.pos.x, top}};
-            for (int i=0; i < distance; i++) 
-            {
-                {
-                    V2 new_position = state->player_position + V2{interval.x, 0};
-                    bool32 move = 1;
-                    Coord new_coord = ToCoord(new_position);
-                    for (int p=0; p < 4; p++)
-                    {
-                        BlockCoord block_coord = ToBlockCoord(new_coord + checks[p]);
-                        int block = LevelMap_GetBlock(level_map, block_coord);
-        
-                        if (block >= 1 || block_coord.x >= 16 || block_coord.x < 0)
-                        {
-                            move = 0;
-                            interval.x = 0.0f;
-                            state->player_velocity.x = 0.0f;
-                        }
-                    }
-                    if (move)
-                    {
-                        state->player_position = new_position;
-                    }
-                }
-                {
-                    V2 new_position = state->player_position + V2{0, interval.y};
-                    bool32 move = 1;
-                    Coord new_coord = ToCoord(new_position);
-                    for (int p=0; p < 4; p++)
-                    {
-                        BlockCoord block_coord = ToBlockCoord(new_coord + checks[p]);
-                        int block = LevelMap_GetBlock(level_map, block_coord);
-        
-                        if (block >= 1 || block_coord.y >= 16 || block_coord.y < 0)
-                        {
-                            move = 0;
-                            interval.y = 0.0f;
-                            state->player_velocity.y = 0.0f;
-                        }
-                    }
-                    if (move)
-                    {
-                        state->player_position = new_position;
-                    }
-                }
-            }
-        }
-
-        if (state->attack_frames)
-        {
-            state->attack_frames--;
 
         }
-
 
         // MARK: Draw
         {
-            {
-                uint8* set_row = buffer->pixels;
-                uint8* get_row = ((uint8*)level_map->pixels); // TODO: add camera pos
-                for (int y=0; y < GAME_HEIGHT; y++)
-                {
-                    memcpy(set_row, get_row, CAMERA_WIDTH * BLOCK_SIZE);
-                    set_row += buffer->pitch;
-                    get_row += CAMERA_WIDTH * BLOCK_SIZE;
-
-                }
+            DrawClear(buffer, 3);
+            DrawSprite(buffer, spritemap, ToCoord(state->friend_position), TileRect{{6, 0}, 2, 2}, 3);
+            for (int i=0; i < 2; i++) {
+                Entity e = state->entities[i];
+                DrawSprite(buffer, spritemap, ToCoord(e.position), e.sprite, 3);
             }
-
-            TileCoord player_sprite = {0, 4};
-            if (state->player_direction == 0) {
-                player_sprite = {2, 4};
-            }
-            else if (state->player_direction == 1) {
-                player_sprite = {4, 4};
-            }
-            else if (state->player_direction == 2) {
-                player_sprite = {0, 4};
-            }
-            else {
-                player_sprite = {6, 4};
-            }
-            // if (state->player_facing_right)
-            // {
-            //     if (state->player_dash_frames) player_sprite = {4, 2};
-            //     else player_sprite = {0, 2};
-            // }
-            // else
-            // {
-            //     if (state->player_dash_frames) player_sprite = {6, 2};
-            //     else player_sprite = {2, 2};
-            // }
-            DrawSprite(buffer, spritemap, ToCoord(state->player_position), TileRect{player_sprite, 2, 2}, 2);
-            if (state->attack_frames) {
-                DrawSprite(buffer, spritemap, ToCoord(state->player_position), TileRect{0, 6, 2, 2}, 2);
-            }
-
         }
     }
     else if (state->mode == 1) // MARK: Edit

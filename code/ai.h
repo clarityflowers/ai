@@ -59,18 +59,27 @@ void * PopSize_(MEMORY_ARENA *arena, memory_index size)
 #define LEVELMAP_HEIGHT (CAMERA_WIDTH * 1)
 
 
-
-struct LevelMap
-{
-    uint8 blocks[LEVELMAP_HEIGHT * LEVELMAP_WIDTH];
-    uint8 pixels[LEVELMAP_HEIGHT * BLOCK_SIZE * LEVELMAP_WIDTH * BLOCK_SIZE];
-};
-
 struct PixelBuffer
 {
     uint8* pixels;
     int w, h, pitch;
 };
+
+struct Entity
+{
+    TileRect sprite;
+    V2 position;
+    float temperature;
+    float brightness;
+};
+
+struct Sense
+{
+    float mean;
+    float variance;
+};
+
+#define IDEAS_COUNT 256
 
 struct GAME_STATE
 {
@@ -110,14 +119,21 @@ struct GAME_STATE
 
     int random_number_index;
 
-    LevelMap level_map;
-    Coord camera;
+    V2 friend_position;
+    float friend_temperature;
 
-    V2 player_position;
-    V2 player_velocity;
-    uint8 player_direction;
-    uint8 attack_frames;
+    float associations[IDEAS_COUNT * (IDEAS_COUNT - 1) / 2];
+    float mood[IDEAS_COUNT];
+    Entity entities[IDEAS_COUNT];
+    Sense senses[IDEAS_COUNT];
 };
+
+#define PAIN_PLEASURE 0
+#define NEAR_FAR 1
+#define HOT_COLD 2
+#define BRIGHT_DARK 3
+#define MOVE_TOWARDS_AWAY 4
+#define DISTANCE 5
 
 #define CLAIRE_AI_H
 #endif

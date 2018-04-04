@@ -12,6 +12,7 @@
 
 #define Pi32  3.1415926539f
 #define Tau32 6.2831853071f
+#define Euler32   2.7182818285f
 #define internal static
 #define local_persist static
 #define global_variable static
